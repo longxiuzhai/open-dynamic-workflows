@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Fanout"
+  short_description: "Collect raw multi-agent outputs"
+  default_prompt: "Use $agent-fanout-plan to collect independent plans from configured coding agents."

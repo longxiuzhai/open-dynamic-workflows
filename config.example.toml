@@ -1,0 +1,47 @@
+# Copy to ~/.config/agent-fanout/config.toml or pass with --config.
+# This file intentionally calls existing harness CLIs instead of implementing model APIs.
+
+default_agents = ["codex", "claude", "gemini"]
+timeout_seconds = 1800
+workspace_mode = "copy"
+capture_diff = true
+max_output_chars = 0
+
+[agents.codex]
+label = "Codex CLI"
+command = [
+  "codex",
+  "exec",
+  "--skip-git-repo-check",
+  "--sandbox",
+  "workspace-write",
+  "--cd",
+  "{workspace}",
+  "-"
+]
+stdin = "{prompt}"
+
+[agents.claude]
+label = "Claude Code"
+command = [
+  "claude",
+  "--print",
+  "--permission-mode",
+  "acceptEdits",
+  "--no-session-persistence",
+  "{prompt}"
+]
+
+[agents.gemini]
+label = "Gemini CLI"
+command = [
+  "gemini",
+  "--approval-mode",
+  "auto_edit",
+  "{prompt}"
+]
+
+# Example: a custom wrapper around an MCP-backed bridge.
+# [agents.codex_mcp]
+# label = "Codex via MCP wrapper"
+# command = ["my-codex-mcp-wrapper", "--cwd", "{workspace}", "--prompt-file", "{prompt_file}"]
