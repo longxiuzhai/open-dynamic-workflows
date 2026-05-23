@@ -3,6 +3,7 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import os
+import re
 import shlex
 import subprocess
 import tempfile
@@ -13,6 +14,8 @@ from pathlib import Path
 
 from .config import AgentConfig, FanoutConfig
 from .workspace import WorkspaceCopy, collect_diff
+
+PLACEHOLDER_PATTERN = re.compile(r"\{(prompt|prompt_file|workspace|source|action|agent)\}")
 
 
 @dataclass
@@ -367,16 +370,15 @@ def expand_text(
     if value is None:
         return ""
     replacements = {
-        "{prompt}": prompt,
-        "{prompt_file}": str(prompt_file),
-        "{workspace}": str(workspace),
-        "{source}": str(source.resolve()),
-        "{action}": action,
-        "{agent}": agent,
+        "prompt": prompt,
+        "prompt_file": str(prompt_file),
+        "workspace": str(workspace),
+        "source": str(source.resolve()),
+        "action": action,
+        "agent": agent,
     }
-    for key, replacement in replacements.items():
-        value = value.replace(key, replacement)
-    return os.path.expandvars(value)
+    expanded = PLACEHOLDER_PATTERN.sub(lambda match: replacements[match.group(1)], value)
+    return os.path.expandvars(expanded)
 
 
 def render_result(result: AgentResult) -> list[str]:

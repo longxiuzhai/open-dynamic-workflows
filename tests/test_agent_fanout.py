@@ -160,6 +160,58 @@ stdin = "{{prompt}}"
     assert "has artifact True" in payload["results"][0]["stdout"]
 
 
+def test_prompt_expansion_preserves_placeholders_inside_prompt(tmp_path: Path) -> None:
+    artifact = tmp_path / "config.example.toml"
+    artifact.write_text('command = ["codex", "--cd", "{workspace}", "-"]\n')
+    config = tmp_path / "config.toml"
+    reader_code = (
+        "import sys; "
+        "data=sys.stdin.read(); "
+        "artifact=data.split('--- artifact:', 1)[1].split('--- end artifact:', 1)[0]; "
+        "target='\"' + '{' + 'workspace' + '}' + '\"'; "
+        "print('literal placeholder', target in artifact); "
+        "print('temp path leaked', '/agent-fanout-' in artifact)"
+    )
+    reader_command = json.dumps([sys.executable, "-c", reader_code])
+    config.write_text(
+        f"""
+default_agents = ["reader"]
+
+[agents.reader]
+command = {reader_command}
+stdin = "{{prompt}}"
+""".strip()
+    )
+    result = run_cli(
+        tmp_path,
+        [
+            "review",
+            "--config",
+            str(config),
+            "--artifact",
+            str(artifact),
+            "--task",
+            "review placeholders",
+            "--json",
+        ],
+        cwd=tmp_path,
+    )
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    stdout = payload["results"][0]["stdout"]
+    assert "literal placeholder True" in stdout
+    assert "temp path leaked False" in stdout
+
+
+def test_docs_do_not_reference_nonexistent_skill_triggers() -> None:
+    invalid = ("$agent-fanout-plan", "$agent-fanout-execute", "$agent-fanout-review")
+    paths = [ROOT / "README.md", ROOT / "SKILL.md", ROOT / "agents" / "openai.yaml"]
+    for path in paths:
+        content = path.read_text()
+        for trigger in invalid:
+            assert trigger not in content, f"{path} references nonexistent skill {trigger}"
+
+
 def test_python39_fallback_parser_supports_multiline_arrays() -> None:
     payload = parse_simple_toml(
         """

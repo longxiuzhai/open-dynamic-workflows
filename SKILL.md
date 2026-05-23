@@ -1,6 +1,6 @@
 ---
 name: agent-fanout
-description: Fan out one Plan, Execute, or Review request to multiple independent coding agents such as Codex CLI, Claude Code, Gemini CLI, or MCP-backed wrappers, then return their raw outputs to the main agent. Use when the user explicitly invokes $agent-fanout, $agent-fanout-plan, $agent-fanout-execute, or $agent-fanout-review for multi-agent planning, implementation attempts, or review.
+description: Fan out one Plan, Execute, or Review request to multiple independent coding agents such as Codex CLI, Claude Code, Gemini CLI, or MCP-backed wrappers, then return their raw outputs to the main agent. Use when the user explicitly invokes $agent-fanout for multi-agent planning, implementation attempts, or review. Treat plan, execute, and review as actions, not separate skills.
 license: MIT. See LICENSE for full terms.
 ---
 
@@ -10,15 +10,15 @@ Use this skill only when the user manually asks for multi-agent fan-out. It disp
 
 This skill is not a voting system, debate loop, consensus engine, or autonomous file editor.
 
-## Commands
+## Actions
 
-| User command | Action | Script command |
+| User prompt | Action | Script command |
 | --- | --- | --- |
-| `$agent-fanout-plan` | Ask each agent for an independent plan or design. | `python3 scripts/agent_fanout.py plan --task "..."`
-| `$agent-fanout-execute` | Ask each agent to independently attempt a concrete implementation in an isolated workspace copy. | `python3 scripts/agent_fanout.py execute --task "..."`
-| `$agent-fanout-review` | Ask each agent to independently review an artifact, patch, design, or code. | `python3 scripts/agent_fanout.py review --artifact path --task "..."`
+| `$agent-fanout plan` | Ask each agent for an independent plan or design. | `python3 scripts/agent_fanout.py plan --task "..."`
+| `$agent-fanout execute` | Ask each agent to independently attempt a concrete implementation in an isolated workspace copy. | `python3 scripts/agent_fanout.py execute --task "..."`
+| `$agent-fanout review` | Ask each agent to independently review an artifact, patch, design, or code. | `python3 scripts/agent_fanout.py review --artifact path --task "..."`
 
-`$agent-fanout` may be used as the generic entry point when the user names one of the three actions.
+`$agent-fanout` is the only Agent Skill entry point. Do not treat plan, execute, or review as separate skills.
 
 ## Workflow
 
