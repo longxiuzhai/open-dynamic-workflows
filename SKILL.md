@@ -55,7 +55,8 @@ command = ["codex", "exec", "--skip-git-repo-check", "--sandbox", "workspace-wri
 stdin = "{prompt}"
 
 [agents.claude]
-command = ["claude", "--print", "--permission-mode", "acceptEdits", "--no-session-persistence", "{prompt}"]
+command = ["claude", "--print", "--permission-mode", "acceptEdits", "--no-session-persistence"]
+stdin = "{prompt}"
 
 [agents.gemini]
 command = ["gemini", "--approval-mode", "auto_edit", "{prompt}"]
@@ -66,6 +67,9 @@ Single-call overrides:
 ```bash
 python3 scripts/agent_fanout.py plan --agents codex,claude --task "..."
 ```
+
+If Gemini CLI is not installed, set `default_agents = ["codex", "claude"]` or pass
+`--agents codex,claude`.
 
 Read `config.example.toml` and `references/adapters.md` when adding MCP wrappers such as `codex-mcp-server` or `claude-code-mcp`.
 

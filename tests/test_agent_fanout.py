@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from agent_fanout.config import default_config, parse_simple_toml
+
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "scripts" / "agent_fanout.py"
 
@@ -156,3 +158,36 @@ stdin = "{{prompt}}"
     assert result.returncode == 0
     payload = json.loads(result.stdout)
     assert "has artifact True" in payload["results"][0]["stdout"]
+
+
+def test_python39_fallback_parser_supports_multiline_arrays() -> None:
+    payload = parse_simple_toml(
+        """
+default_agents = ["codex", "claude"]
+
+[agents.codex]
+command = [
+  "codex",
+  "exec",
+  "--cd",
+  "{workspace}",
+  "-"
+]
+stdin = "{prompt}"
+""".strip()
+    )
+    assert payload["default_agents"] == ["codex", "claude"]
+    assert payload["agents"]["codex"]["command"] == [
+        "codex",
+        "exec",
+        "--cd",
+        "{workspace}",
+        "-",
+    ]
+    assert payload["agents"]["codex"]["stdin"] == "{prompt}"
+
+
+def test_builtin_claude_adapter_uses_stdin() -> None:
+    claude = default_config().agents["claude"]
+    assert "{prompt}" not in claude.command
+    assert claude.stdin == "{prompt}"

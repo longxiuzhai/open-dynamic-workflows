@@ -61,8 +61,8 @@ def default_config() -> FanoutConfig:
                 "--permission-mode",
                 "acceptEdits",
                 "--no-session-persistence",
-                "{prompt}",
             ],
+            stdin="{prompt}",
         ),
         "gemini": AgentConfig(
             name="gemini",
@@ -192,8 +192,7 @@ def load_toml(path: Path) -> dict[str, Any]:
 def parse_simple_toml(text: str) -> dict[str, Any]:
     data: dict[str, Any] = {}
     current: dict[str, Any] = data
-    for line_number, raw_line in enumerate(text.splitlines(), start=1):
-        line = strip_comment(raw_line).strip()
+    for line_number, line in logical_toml_lines(text):
         if not line:
             continue
         if line.startswith("[") and line.endswith("]"):
@@ -228,8 +227,61 @@ def parse_simple_toml_value(raw_value: str, line_number: int) -> Any:
     except json.JSONDecodeError as exc:
         raise ValueError(
             "Python 3.9 fallback parser supports strings, booleans, integers, "
-            f"and JSON-style arrays only; invalid value on line {line_number}: {raw_value}"
+            "and JSON-style arrays only; invalid value on line "
+            f"{line_number}: {raw_value}"
         ) from exc
+
+
+def logical_toml_lines(text: str) -> list[tuple[int, str]]:
+    logical_lines: list[tuple[int, str]] = []
+    pending: list[str] = []
+    start_line = 0
+    bracket_depth = 0
+
+    for line_number, raw_line in enumerate(text.splitlines(), start=1):
+        line = strip_comment(raw_line).strip()
+        if not line and bracket_depth == 0:
+            continue
+        if bracket_depth == 0:
+            pending = [line]
+            start_line = line_number
+        else:
+            pending.append(line)
+        bracket_depth += bracket_delta(line)
+        if bracket_depth < 0:
+            raise ValueError(f"Invalid TOML array on line {line_number}")
+        if bracket_depth == 0:
+            logical_lines.append((start_line, " ".join(part for part in pending if part)))
+            pending = []
+
+    if bracket_depth != 0:
+        raise ValueError(f"Unclosed TOML array starting on line {start_line}")
+    return logical_lines
+
+
+def bracket_delta(line: str) -> int:
+    in_string = False
+    escaped = False
+    delta = 0
+    for char in line:
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\" and in_string:
+            escaped = True
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char == "[":
+            delta += 1
+        elif char == "]":
+            delta -= 1
+    if line.startswith("[") and line.endswith("]") and "=" not in line:
+        return 0
+    return delta
 
 
 def strip_comment(raw_line: str) -> str:

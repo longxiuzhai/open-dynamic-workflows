@@ -35,7 +35,8 @@ Claude Code supports non-interactive output with `claude --print`:
 
 ```toml
 [agents.claude]
-command = ["claude", "--print", "--permission-mode", "acceptEdits", "--no-session-persistence", "{prompt}"]
+command = ["claude", "--print", "--permission-mode", "acceptEdits", "--no-session-persistence"]
+stdin = "{prompt}"
 ```
 
 For heavily locked-down use, configure `--tools ""` or a stricter `--permission-mode`. For MCP-based Claude delegation, prefer an existing wrapper such as `steipete/claude-code-mcp` and point a custom command at that wrapper.

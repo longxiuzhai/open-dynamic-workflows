@@ -117,6 +117,9 @@ python3 scripts/agent_fanout.py review \
 python3 scripts/agent_fanout.py plan --agents codex,claude --task "..."
 ```
 
+如果你没有安装 Gemini CLI，把配置里的 `default_agents` 改成
+`["codex", "claude"]`，或单次运行时传 `--agents codex,claude`。
+
 ---
 
 ## 效果示例

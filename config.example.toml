@@ -28,9 +28,9 @@ command = [
   "--print",
   "--permission-mode",
   "acceptEdits",
-  "--no-session-persistence",
-  "{prompt}"
+  "--no-session-persistence"
 ]
+stdin = "{prompt}"
 
 [agents.gemini]
 label = "Gemini CLI"
