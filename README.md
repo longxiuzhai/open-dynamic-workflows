@@ -52,40 +52,76 @@ producing become artifacts you can run anywhere.
 
 ## Install
 
-**A self-contained binary (recommended).** One file that embeds the Node runtime
-*and* ODW — no Node, no npm, no PATH gymnastics, no global-module conflicts.
-Download, `chmod +x`, run, exactly like a Go or Rust binary:
+The whole install is **a binary + a skill** — no Node, no npm, no PATH
+gymnastics, no global-module conflicts. Pick whichever path fits.
+
+### 1. Let your AI agent install it
+
+ODW is built for coding agents, so the easiest path is to let yours do it. Paste
+this to your agent (Claude Code, Codex, Gemini, …):
+
+> Install Open Dynamic Workflows for me: run
+> `curl -fsSL https://raw.githubusercontent.com/xz1220/open-dynamic-workflows/main/scripts/install.sh | sh`
+> to put the `odw` binary on my PATH and the workflow skill in your skills
+> directory, then run `odw --version` to confirm. From now on, when a task is big
+> enough to fan out, write an ODW workflow and run it with `odw run`.
+
+It runs the script, picks up the [skill](skill/SKILL.md), and can author and run
+workflows immediately.
+
+### 2. One-command script
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/xz1220/open-dynamic-workflows/main/scripts/install.sh | sh
 ```
 
-That drops `odw` on your PATH and installs the workflow skill into your agent's
-skills directory — **the whole install is a binary + a skill**. You can also grab
-a binary from [Releases](https://github.com/xz1220/open-dynamic-workflows/releases)
-(`gunzip` it, then `chmod +x`). It's ~110 MB on disk — almost entirely the
-embedded Node runtime, like any Node→binary tool — but the download is gzipped to
-~35 MB. (The agents ODW *drives* — `claude`, `codex`, … — remain their own CLIs
-you install separately.)
+Downloads the prebuilt binary for your platform (gzipped, ~35 MB) to
+`~/.local/bin/odw` and installs the skill into `~/.claude/skills/` (falling back
+to `~/.codex/skills/`). No Node required. Override with `ODW_BIN_DIR` /
+`ODW_VERSION`.
 
-**From npm** (needs Node ≥20):
+### 3. Manual
+
+Prefer not to pipe `curl` into `sh`? Grab the asset for your OS/arch from
+[Releases](https://github.com/xz1220/open-dynamic-workflows/releases), then:
 
 ```bash
-npm i -g open-dynamic-workflows   # puts `odw` on your PATH
+# a) the binary — onto your PATH
+gunzip odw-darwin-arm64.gz && chmod +x odw-darwin-arm64
+mv odw-darwin-arm64 ~/.local/bin/odw
+
+# b) the skill — copy skill/ into your agent's skills dir
+git clone https://github.com/xz1220/open-dynamic-workflows.git
+cp -r open-dynamic-workflows/skill ~/.claude/skills/open-dynamic-workflows
 ```
+
+Or, **if you already have Node ≥20**, skip the binary: `npm i -g
+open-dynamic-workflows` puts `odw` on your PATH (then still do step *b* for the
+skill).
+
+> The on-disk binary is ~110 MB — almost entirely the embedded Node runtime, like
+> any Node→binary tool — but the download is gzipped to ~35 MB. The agents ODW
+> *drives* (`claude`, `codex`, …) remain their own CLIs you install separately.
 
 ## Quick start
 
-From source (to hack on the engine):
+ODW is mostly driven **by your coding agent**, not by hand. With the skill and
+binary installed, just ask your agent for something big — it writes a workflow and
+runs it for you, out of its own context:
 
-```bash
-git clone https://github.com/xz1220/open-dynamic-workflows.git
-cd open-dynamic-workflows
-npm install && npm run build      # tsc → dist/  (the published package has zero runtime deps)
-node dist/cli.js --help
-```
+> **You → your agent:** *"Use Open Dynamic Workflows to deep-research X vs Y and
+> write me a cited report."*
+>
+> **Your agent** (it picked up the ODW skill) writes a workflow script and runs
+> `odw run research.js --wait`, then hands back the report — dozens of searches
+> and a fact-check pass ran in the background, never touching its context.
 
-Write a workflow — `fan-out-reduce.js`:
+That's the whole point: the agent keeps a clean context and fans the heavy work
+out to ODW.
+
+**Running `odw` yourself** — or authoring a custom workflow — is the same one
+command. A workflow is plain JavaScript in Claude Code's dialect, e.g.
+`fan-out-reduce.js`:
 
 ```js
 export const meta = {
@@ -103,15 +139,12 @@ return await agent(
 )
 ```
 
-Run it against your configured agent and block for the result:
-
 ```bash
 odw run fan-out-reduce.js --wait --args '{"question": "Design a rate limiter."}'
 ```
 
-It is **plain JavaScript** in the same dialect Claude Code uses. The flagship
-example, [`examples/deep-research.js`](examples/deep-research.js) (fan-out web
-research → adversarial fact-checking → a cited report), is exactly such a script.
+The flagship [`examples/deep-research.js`](examples/deep-research.js) (fan-out web
+research → adversarial fact-check → cited report) is exactly such a script.
 
 ## The primitives
 

@@ -48,39 +48,69 @@ workflow,就成了你在任何 agent 上都能跑的资产。
 
 ## 安装
 
-**自包含二进制(推荐)。** 一个文件,把 Node 运行时**和** ODW 焊在一起——无需 Node、
-无需 npm、不用折腾 PATH、没有全局模块冲突。下载、`chmod +x`、运行,和 Go / Rust 编出来
-的二进制体验完全一致:
+整个安装就是 **一个二进制 + 一个 skill**——无需 Node、无需 npm、不用折腾 PATH、没有
+全局模块冲突。挑一种适合你的:
+
+### 1. 让你的 AI Agent 自己装
+
+ODW 本来就是给 coding agent 用的,最省事的就是让它自己装。把下面这段**粘给你的 agent**
+(Claude Code、Codex、Gemini …):
+
+> Install Open Dynamic Workflows for me: run
+> `curl -fsSL https://raw.githubusercontent.com/xz1220/open-dynamic-workflows/main/scripts/install.sh | sh`
+> to put the `odw` binary on my PATH and the workflow skill in your skills
+> directory, then run `odw --version` to confirm. From now on, when a task is big
+> enough to fan out, write an ODW workflow and run it with `odw run`.
+
+它会跑这个脚本、加载 [skill](skill/SKILL.md),然后立刻就能写并跑 workflow。
+
+### 2. 一键脚本
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/xz1220/open-dynamic-workflows/main/scripts/install.sh | sh
 ```
 
-它会把 `odw` 放到你的 PATH 上,并把 workflow skill 装进你 agent 的 skills 目录——
-**整个安装就是一个二进制 + 一个 skill**。你也可以直接从
-[Releases](https://github.com/xz1220/open-dynamic-workflows/releases) 下载(`gunzip`
-解压后 `chmod +x`)。它在磁盘上约 110 MB——和任何 Node→二进制 的工具一样,几乎全是内嵌
-的 Node 运行时——但下载已 gzip 压到约 35 MB。(ODW 所**驱动**的 agent——`claude`、
-`codex` 等——仍是你另行安装的独立 CLI。)
+自动下对应平台的预编译二进制(gzip,约 35 MB)到 `~/.local/bin/odw`,并把 skill 装进
+`~/.claude/skills/`(没有就退到 `~/.codex/skills/`)。无需 Node。可用环境变量
+`ODW_BIN_DIR` / `ODW_VERSION` 覆盖。
 
-**从 npm 安装**(需要 Node ≥20):
+### 3. 手动安装
+
+不想把 `curl` 管道丢给 `sh`?从
+[Releases](https://github.com/xz1220/open-dynamic-workflows/releases) 下对应 OS/arch 的资产,然后:
 
 ```bash
-npm i -g open-dynamic-workflows   # 把 `odw` 装到 PATH 上
+# a) 二进制 —— 放到 PATH 上
+gunzip odw-darwin-arm64.gz && chmod +x odw-darwin-arm64
+mv odw-darwin-arm64 ~/.local/bin/odw
+
+# b) skill —— 把 skill/ 拷进 agent 的 skills 目录
+git clone https://github.com/xz1220/open-dynamic-workflows.git
+cp -r open-dynamic-workflows/skill ~/.claude/skills/open-dynamic-workflows
 ```
+
+或者,**如果你已经有 Node ≥20**,可以跳过二进制:`npm i -g open-dynamic-workflows`
+就能把 `odw` 装到 PATH 上(skill 仍按上面第 *b* 步装)。
+
+> 二进制在磁盘上约 110 MB——和任何 Node→二进制 的工具一样,几乎全是内嵌的 Node 运行
+> 时——但下载已 gzip 压到约 35 MB。ODW 所**驱动**的 agent(`claude`、`codex` …)仍是你
+> 另行安装的独立 CLI。
 
 ## 快速开始
 
-从源码起步(改引擎用):
+ODW 主要是**被你的 coding agent 驱动**的,不是手动跑。装好 skill 和二进制后,你只要把一个
+大任务丢给 agent——它会**自己写一个 workflow 并跑起来**,而且是在它自己的上下文之外:
 
-```bash
-git clone https://github.com/xz1220/open-dynamic-workflows.git
-cd open-dynamic-workflows
-npm install && npm run build      # tsc → dist/(发布出的包零运行时依赖)
-node dist/cli.js --help
-```
+> **你 → 你的 agent:** *"用 Open Dynamic Workflows 深度调研 X 和 Y 的取舍,给我一份带引用
+> 的报告。"*
+>
+> **你的 agent**(已经加载了 ODW skill)写一个 workflow 脚本、跑 `odw run research.js
+> --wait`,然后把报告交回来——几十次检索和一轮事实核查都在后台跑完,全程不碰它的上下文。
 
-写一个 workflow —— `fan-out-reduce.js`:
+这正是重点:**agent 保持干净的上下文,把重活扇出给 ODW。**
+
+**你自己跑 `odw`**(或自己写一个 workflow)也是同一条命令。一个 workflow 就是 Claude Code
+方言的纯 JavaScript,比如 `fan-out-reduce.js`:
 
 ```js
 export const meta = {
@@ -98,15 +128,12 @@ return await agent(
 )
 ```
 
-跑它,并阻塞等结果:
-
 ```bash
 odw run fan-out-reduce.js --wait --args '{"question": "Design a rate limiter."}'
 ```
 
-它就是**纯 JavaScript**,和 Claude Code 用的是同一种方言。旗舰示例
-[`examples/deep-research.js`](examples/deep-research.js)(扇出式联网调研 → 对抗式事实核查
-→ 带引用的报告)正是这样一个脚本。
+旗舰示例 [`examples/deep-research.js`](examples/deep-research.js)(扇出式联网调研 → 对抗式
+事实核查 → 带引用报告)正是这样一个脚本。
 
 ## 编程原语
 
