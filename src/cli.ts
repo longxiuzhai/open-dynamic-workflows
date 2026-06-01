@@ -15,6 +15,7 @@
  *   odw pause|resume|stop <run_id>
  */
 
+import { spawn } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
 import { basename } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +26,7 @@ import type { WorkflowEvent } from "./events.js";
 import { VERSION } from "./index.js";
 import { startRun, waitFor } from "./runtime/launcher.js";
 import { RunStore, TERMINAL_STATES } from "./runtime/run-store.js";
+import { startServer } from "./runtime/server.js";
 import { executeRun } from "./runtime/worker.js";
 import { isSeaBinary } from "./sea.js";
 
@@ -34,6 +36,7 @@ export const COMMANDS = [
   "status",
   "logs",
   "result",
+  "serve",
   "pause",
   "resume",
   "stop",
@@ -58,6 +61,7 @@ export function helpText(): string {
     "  odw logs <run_id> [--follow]                       print a run's progress events",
     "  odw result <run_id>                                print a finished run's result",
     "  odw list                                           list known runs",
+    "  odw serve [--port N] [--host H] [--open]           open the live dashboard in a browser",
     "  odw pause|resume|stop <run_id>                     control a running workflow",
     "",
     "Options:",
@@ -65,6 +69,9 @@ export function helpText(): string {
     "  --config <path>     path to an odw.config.json",
     "  --runs-root <dir>   directory runs are stored under",
     "  --wait              block until the run finishes and print the result",
+    "  --port <n>          dashboard port (serve; default 4317)",
+    "  --host <addr>       dashboard bind address (serve; default 127.0.0.1)",
+    "  --open              open the dashboard in the default browser (serve)",
     "  -h, --help          show this help",
     "  -v, --version       show the version",
   ].join("\n");
@@ -99,6 +106,8 @@ export async function main(argv: string[]): Promise<number> {
         return await cmdLogs(rest);
       case "list":
         return cmdList(rest);
+      case "serve":
+        return await cmdServe(rest);
       case "pause":
       case "resume":
       case "stop":
@@ -252,6 +261,64 @@ function cmdList(rest: string[]): number {
     process.stdout.write(`${runId}  ${String(status.state ?? "?").padEnd(8)}  ${status.name ?? ""}\n`);
   }
   return 0;
+}
+
+async function cmdServe(rest: string[]): Promise<number> {
+  const { values } = parseArgs({
+    args: rest,
+    allowPositionals: true,
+    options: {
+      config: { type: "string" },
+      "runs-root": { type: "string" },
+      port: { type: "string" },
+      host: { type: "string" },
+      open: { type: "boolean" },
+    },
+  });
+
+  const port = values.port === undefined ? 4317 : Number(values.port);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    process.stderr.write(`odw serve: invalid --port '${values.port}'\n`);
+    return 2;
+  }
+  const host = values.host ?? "127.0.0.1";
+  const store = storeFrom(values);
+
+  const handle = await startServer({ store, port, host });
+  process.stdout.write(`odw dashboard → ${handle.url}\n`);
+  process.stdout.write(`  watching ${store.root}\n`);
+  if (host !== "127.0.0.1" && host !== "localhost" && host !== "::1") {
+    process.stderr.write(
+      `  ⚠ bound to ${host}: every project's runs (prompts, results) are reachable off-localhost — use only on a trusted network\n`,
+    );
+  }
+  process.stdout.write("  press Ctrl-C to stop\n");
+  if (values.open) openBrowser(handle.url);
+
+  await new Promise<void>((resolve) => {
+    const shutdown = () => {
+      process.stdout.write("\nshutting down…\n");
+      handle.close().then(resolve);
+    };
+    process.once("SIGINT", shutdown);
+    process.once("SIGTERM", shutdown);
+  });
+  return 0;
+}
+
+/** Best-effort: open `url` in the platform default browser; failures are silent. */
+function openBrowser(url: string): void {
+  const [cmd, args] =
+    process.platform === "darwin"
+      ? ["open", [url]]
+      : process.platform === "win32"
+        ? ["cmd", ["/c", "start", "", url]]
+        : ["xdg-open", [url]];
+  try {
+    spawn(cmd as string, args as string[], { stdio: "ignore", detached: true }).unref();
+  } catch {
+    /* no browser opener available — the URL is already printed */
+  }
 }
 
 function cmdControl(action: Command, rest: string[]): number {

@@ -107,11 +107,18 @@ export class RunStore {
   readEvents(runId: string): WorkflowEvent[] {
     const path = this.eventsPath(runId);
     if (!existsSync(path)) return [];
-    return readFileSync(path, "utf8")
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .map((l) => JSON.parse(l) as WorkflowEvent);
+    const out: WorkflowEvent[] = [];
+    for (const line of readFileSync(path, "utf8").split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        out.push(JSON.parse(trimmed) as WorkflowEvent);
+      } catch {
+        // JsonlSink appends without fsync, so a live reader can catch the final
+        // line mid-write. Skip the torn line; the next read sees it whole.
+      }
+    }
+    return out;
   }
 
   // --- result & error --------------------------------------------------------
