@@ -32,12 +32,21 @@ jobs:
           node-version: "24"
       - run: npm ci
       - run: npm run build:binary
-      - name: Name the artifact
+      - name: Name + compress the artifact
         shell: bash
         run: |
+          # The binary is ~110 MB (almost entirely the embedded Node runtime);
+          # gzip cuts the *download* to ~35 MB. gzip is lossless, so the macOS
+          # code signature survives the round-trip. Windows ships the raw .exe.
           ext=""; [ "${{ matrix.os }}" = "win" ] && ext=".exe"
-          mv "build/odw$ext" "odw-${{ matrix.os }}-${{ matrix.arch }}$ext"
-          echo "ASSET=odw-${{ matrix.os }}-${{ matrix.arch }}$ext" >> "$GITHUB_ENV"
+          bin="odw-${{ matrix.os }}-${{ matrix.arch }}$ext"
+          mv "build/odw$ext" "$bin"
+          if [ "${{ matrix.os }}" = "win" ]; then
+            echo "ASSET=$bin" >> "$GITHUB_ENV"
+          else
+            gzip -9 "$bin"
+            echo "ASSET=$bin.gz" >> "$GITHUB_ENV"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ASSET }}

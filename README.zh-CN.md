@@ -56,8 +56,10 @@ curl -fsSL https://raw.githubusercontent.com/xz1220/open-dynamic-workflows/main/
 
 它会把 `odw` 放到你的 PATH 上,并把 workflow skill 装进你 agent 的 skills 目录——
 **整个安装就是一个二进制 + 一个 skill**。你也可以直接从
-[Releases](https://github.com/xz1220/open-dynamic-workflows/releases) 下二进制再 `chmod +x`。
-(ODW 所**驱动**的 agent——`claude`、`codex` 等——仍是你另行安装的独立 CLI。)
+[Releases](https://github.com/xz1220/open-dynamic-workflows/releases) 下载(`gunzip`
+解压后 `chmod +x`)。它在磁盘上约 110 MB——和任何 Node→二进制 的工具一样,几乎全是内嵌
+的 Node 运行时——但下载已 gzip 压到约 35 MB。(ODW 所**驱动**的 agent——`claude`、
+`codex` 等——仍是你另行安装的独立 CLI。)
 
 **从 npm 安装**(需要 Node ≥20):
 

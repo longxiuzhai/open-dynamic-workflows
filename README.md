@@ -61,8 +61,10 @@ curl -fsSL https://raw.githubusercontent.com/xz1220/open-dynamic-workflows/main/
 That drops `odw` on your PATH and installs the workflow skill into your agent's
 skills directory — **the whole install is a binary + a skill**. You can also grab
 a binary from [Releases](https://github.com/xz1220/open-dynamic-workflows/releases)
-and `chmod +x` it. (The agents ODW *drives* — `claude`, `codex`, … — remain their
-own CLIs you install separately.)
+(`gunzip` it, then `chmod +x`). It's ~110 MB on disk — almost entirely the
+embedded Node runtime, like any Node→binary tool — but the download is gzipped to
+~35 MB. (The agents ODW *drives* — `claude`, `codex`, … — remain their own CLIs
+you install separately.)
 
 **From npm** (needs Node ≥20):
 

@@ -28,7 +28,7 @@ case "$arch" in
   x86_64|amd64)  ARCH=x64 ;;
   *) echo "unsupported arch: $arch" >&2; exit 1 ;;
 esac
-ASSET="odw-$OS-$ARCH"
+ASSET="odw-$OS-$ARCH.gz"   # the binary is ~110 MB; the release ships it gzipped (~35 MB)
 
 if [ "$VERSION" = "latest" ]; then
   BASE="https://github.com/$REPO/releases/latest/download"
@@ -36,10 +36,10 @@ else
   BASE="https://github.com/$REPO/releases/download/$VERSION"
 fi
 
-# --- the binary --------------------------------------------------------------
+# --- the binary (download compressed, decompress in place) -------------------
 echo "→ downloading $ASSET ($VERSION)"
 mkdir -p "$BIN_DIR"
-curl -fSL "$BASE/$ASSET" -o "$BIN_DIR/odw"
+curl -fSL "$BASE/$ASSET" | gzip -dc > "$BIN_DIR/odw"
 chmod +x "$BIN_DIR/odw"
 
 # --- the skill (into Claude Code's skills dir, else Codex's) -----------------
