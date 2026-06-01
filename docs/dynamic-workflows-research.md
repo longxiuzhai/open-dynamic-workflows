@@ -2,6 +2,7 @@
 
 > 资料日期：2026-05-30 ｜ 状态：Claude Code "dynamic workflows" 处于 research preview
 > 范围：只收录 Claude Code dynamic workflow 机制本身、它的编程原语、激活与运维，以及 Claude Code 现有的多 agent 编排能力（subagent / agent teams）等事实性资料。
+> 关联：本文件是 **[Open Dynamic Workflows](../README.md)** 所对齐的方言（§3.2 的原语与脚本骨架）的事实依据；据此落地的工程方案见 [`dynamic-workflows-tech-plan.md`](./dynamic-workflows-tech-plan.md)。
 
 ---
 

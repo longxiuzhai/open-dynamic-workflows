@@ -1,101 +1,109 @@
 <div align="center">
 
-# agent-swarm
+# Open Dynamic Workflows
 
-**Portable dynamic workflows for any coding agent, in any environment.**
+**Run Claude Code-style dynamic workflows on _any_ coding agent.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/)
+[![Node](https://img.shields.io/badge/Node-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Status](https://img.shields.io/badge/status-rewrite_in_progress-orange.svg)](#roadmap)
+
+English · [简体中文](README.zh-CN.md)
 
 </div>
 
 ---
 
-A *dynamic workflow* is a small script that holds an orchestration plan in
-ordinary code and dispatches coding-agent CLIs at scale — outside the host
-agent's context. Claude Code can do this inside its own private runtime.
-**agent-swarm makes the same capability portable**: write a Python script with a
-handful of composable primitives, point it at any coding-agent CLI (Codex,
-Claude Code, Gemini, Qwen, Kimi, or your own), and run it in the background.
+> 🚧 **Status — active rewrite.** Open Dynamic Workflows is being rebuilt from a
+> Python prototype into a **TypeScript / Node** runtime. The engine skeleton and
+> the `odw` CLI shell have landed (milestone **M0**); the execution layers
+> (**M1–M5**) are in progress. The interfaces below describe the **target**
+> design — see the [Roadmap](#roadmap) for what is wired up today.
 
-```python
-# my_workflow.py
-from agentswarm import agent, parallel
+## What is this?
 
-META = {"name": "fan-out-reduce", "description": "draft in parallel, then synthesize"}
+A **dynamic workflow** is a small JavaScript script that holds an orchestration
+plan in ordinary code and dispatches coding-agent CLIs *at scale* — outside the
+host agent's own context. You write the script (or hand it one), a runtime runs
+it in the background, and only the final result comes back.
 
-def workflow(args):
-    drafts = parallel([lambda i=i: agent(f"Draft #{i+1}: {args['question']}") for i in range(4)])
-    return agent("Synthesize the best answer from:\n" + "\n---\n".join(filter(None, drafts)))
+Claude Code can already do this, but only inside its own private runtime.
+**Open Dynamic Workflows makes the same capability portable**: it is an open
+runtime that runs the *same* workflow scripts — Claude's exact dialect
+(`export const meta` + injected `agent` / `parallel` / `pipeline` / … globals) —
+against **any** coding-agent CLI: Codex, Claude Code, Gemini, Qwen, Kimi, or your
+own.
+
+**Why it matters.** Holding the plan in code keeps intermediate work out of the
+host's context, lets you fan out dozens of subagents, and makes multi-stage
+orchestration reproducible. That pattern is broadly useful but has been locked
+inside one vendor's runtime. ODW reopens it as a CLI-agnostic engine, so **any
+agent can orchestrate any other** — and the workflow scripts the Claude Code
+ecosystem is already producing become portable artifacts.
+
+## A workflow looks like this
+
+```js
+// fan-out-reduce.js
+export const meta = {
+  name: 'fan-out-reduce',
+  description: 'Draft in parallel, then synthesize the best answer.',
+}
+
+const drafts = await parallel(
+  [1, 2, 3, 4].map((i) => () => agent(`Draft #${i}: ${args.question}`)),
+)
+
+return await agent(
+  'Synthesize the single best answer from these drafts:\n\n' +
+    drafts.filter(Boolean).join('\n\n---\n\n'),
+)
 ```
 
 ```bash
-swarm run my_workflow.py --wait --args '{"question": "Design a rate limiter."}'
+odw run fan-out-reduce.js --wait --args '{"question": "Design a rate limiter."}'
 ```
 
-## Why
-
-The pattern — hold the plan in code, fan out subagents, keep intermediate work
-out of your context — is broadly useful, but it has been locked inside one
-runtime. agent-swarm rebuilds it as an open, CLI-agnostic library so **any**
-agent can orchestrate **any** other.
-
-## Install
-
-```bash
-pipx install agent-swarm     # or: uvx agent-swarm ... / pip install agent-swarm
-```
-
-This puts a `swarm` command on your PATH (`python -m agentswarm` also works).
-
-### Let an agent install it
-
-Hand the prompt below to any coding agent (Codex, Claude Code, Gemini, …) that
-has never seen agent-swarm. It clones the repo, puts the `swarm` CLI on your
-PATH, and installs the skill into the agent's own skills directory — so the same
-agent can immediately author and run workflows.
-
-> Install the **agent-swarm** dynamic-workflow engine for me, then teach
-> yourself to use it.
->
-> 1. If `https://github.com/xz1220/agent-swarm.git` isn't already checked out
->    locally, clone it to a stable path (e.g. `~/repos/agent-swarm`).
-> 2. Put the `swarm` command on my PATH by installing that checkout: try
->    `pipx install <path>`, else `uv tool install <path>`, else
->    `pip install <path>`. Confirm with `swarm --help`.
-> 3. Install the skill so you can author workflows: symlink the repo's `skill/`
->    directory into your own skills directory under the name `agent-swarm`
->    (Codex CLI → `~/.codex/skills/agent-swarm`; Claude Code → its skills dir).
->    The skill's `SKILL.md` must end up at the root of that skill directory.
-> 4. Read `skill/SKILL.md` to learn the primitives, then verify end-to-end:
->    `swarm run examples/fan_out_reduce.py --wait --args '{"question": "Design a rate limiter."}'`.
-> 5. Report the install method used, the skill path you created, and the output
->    of the verification run.
+It is **plain JavaScript** in the same dialect Claude Code uses — so a script
+written for Claude Code runs here unchanged. The flagship example,
+[`examples/deep-research.js`](examples/deep-research.js) (fan-out web research →
+adversarial fact-checking → a cited report), is exactly such a script and is the
+runtime's v1 acceptance target.
 
 ## The primitives
 
+A workflow is `export const meta = {…}` followed by a script body that runs in an
+async context. The body composes these **injected globals** with ordinary JS
+control flow (loops, `if`, dedup) — no imports:
+
 | Primitive | Role |
 | --- | --- |
-| `agent(prompt, *, adapter, schema, label, phase)` | Run one coding agent on a subtask. The only verb that does work. |
-| `parallel(thunks)` | Run a batch concurrently and wait for all (barrier). |
-| `pipeline(items, *stages)` | Stream items through stages independently (no barrier). |
-| `phase(title)` / `log(message)` | Progress labelling and messages. |
-| `schema.obj/array/string/...` | Typed output contract for reliable hand-offs. |
+| `agent(prompt, opts?)` | Run one coding agent on a subtask. The only verb that does work. Returns its text, or a validated object when `opts.schema` is set. |
+| `parallel(thunks)` | Run a batch concurrently and wait for all of it (**barrier**). A failed thunk becomes `null`. |
+| `pipeline(items, ...stages)` | Stream each item through the stages independently (**no barrier**). Each stage gets `(prev, item, index)`. |
+| `phase(title)` / `log(msg)` | Group progress under a phase / emit a progress line. |
+| `schema` (JSON Schema) | A typed output contract for `agent`; the reply is validated and retried until it conforms. |
+| `args` | The workflow's input, injected verbatim. |
+| `budget` | `{ total, spent(), remaining() }` — scale depth to a token target. |
+| `workflow(ref, args?)` | Run another workflow inline (one level of nesting). |
 
-`parallel` when the next step needs the whole batch at once (dedup, tally,
-synthesis); `pipeline` for multi-stage work. Ordinary Python — loops, `if`,
-comprehensions — does the reducing. Full reference:
-[`skill/references/primitives.md`](skill/references/primitives.md).
+Use **`parallel`** when the next step needs the whole batch at once (dedup,
+tally, synthesis); **`pipeline`** for multi-stage work (the default). Keep
+reductions order-independent — branching on *which agent finished first* breaks
+reproducibility.
 
 ## Run and observe
 
+The `odw` CLI starts a script in a background worker (fire-and-poll) and lets you
+watch it. `--wait` blocks and prints the result.
+
 ```bash
-swarm run wf.py [--args JSON|@file] [--wait]   # start (background); --wait blocks and prints the result
-swarm status <id>      # state + agent count
-swarm logs <id> -f     # stream progress events
-swarm result <id>      # final value
-swarm pause|resume|stop <id>
-swarm list
+odw run wf.js [--args JSON|@file] [--wait]   # start (background); --wait blocks & prints result
+odw status <id>          # state + agent count
+odw logs <id> --follow   # stream progress events
+odw result <id>          # final value
+odw pause|resume|stop <id>
+odw list
 ```
 
 A run executes in a detached worker process and persists everything to a run
@@ -104,58 +112,99 @@ anywhere.
 
 ## Configure adapters
 
-The five common CLIs work out of the box. To change the default, tune flags, or
-add your own, drop an `agentswarm.toml` (see
-[`config.example.toml`](config.example.toml)) at `./`,
-`~/.config/agentswarm/`, or pass `--config`. agent-swarm only shells out to local
-commands — it never calls model APIs directly. Details:
-[`skill/references/adapters.md`](skill/references/adapters.md).
+Codex, Claude Code, Gemini, Qwen, and Kimi work out of the box. To change the
+default, tune flags, or add your own CLI, drop an `odw.config.json` (see
+[`odw.config.example.json`](odw.config.example.json)) in the project root,
+`~/.config/odw/config.json`, or pass `--config`. ODW only shells out to local
+commands — it never calls model APIs directly.
 
-## Architecture
+```jsonc
+{
+  "defaultAdapter": "claude",
+  "concurrency": 8,
+  "adapters": {
+    "my_wrapper": {
+      "label": "My custom CLI",
+      "command": ["my-agent", "--cwd", "{workspace}", "--prompt-file", "{prompt_file}"]
+    }
+  }
+}
+```
 
-Layered, each layer depending only on the one below; workflow scripts touch only
-the top.
+## How it works
 
 ```
-cli ─▶ runtime (background worker + run directory)
-        └─ injects ─▶ workflow script
-                        └─ primitives ─▶ scheduler (concurrency cap + agent backstop)
-                                          agent() ─▶ bridge ─▶ adapters ─▶ real CLI
-                                                      └─ workspace (isolation + diff)
-                                                      └─ schema (validate / retry)
+odw (CLI) ─▶ runtime (background worker + run directory)
+               └─ loads & transforms ─▶ workflow script (.js, Claude dialect)
+                                         └─ injected primitives ─▶ scheduler (async cap + agent backstop)
+                                             agent() ─▶ bridge ─▶ adapters ─▶ real CLI subprocess
+                                                         ├─ workspace (isolation + diff)
+                                                         └─ schema (validate / retry)
 ```
+
+Two design points are worth calling out:
+
+- **The loader is the crux.** Claude's dialect is neither a normal ES module nor
+  a plain script: `export const meta` sits up top, and the body uses top-level
+  `await` *and* top-level `return` while referencing injected globals. The loader
+  extracts `meta`, strips the `export`, and wraps the body in an async function
+  whose parameters *are* the primitives — so the body's `return` becomes the
+  workflow's result.
+- **No threads.** The engine is async to the core. `agent()` is just an async
+  subprocess call, so `parallel` is `Promise.all`, `pipeline` is per-item async
+  chains, and the concurrency cap is a small async semaphore — `min(16, cpus-2)`
+  by default, with a hard backstop on total dispatches per run.
 
 | Path | Layer |
 | --- | --- |
-| `src/agentswarm/adapters/` | L1 — uniform CLI invocation (config, placeholders, runner, built-ins) |
-| `src/agentswarm/bridge.py` | L2 — one agent call → one CLI run, with schema handling |
-| `src/agentswarm/scheduler.py` | L3 — bounded concurrency + total-agent backstop |
-| `src/agentswarm/primitives.py`, `schema.py` | L4 — the primitives and the data contract |
-| `src/agentswarm/runtime/` | L5 — background worker, run directory, control |
-| `src/agentswarm/cli.py` | L6 — the `swarm` command |
-| `src/agentswarm/workspace.py` | cross-cutting — workspace isolation and diff |
+| `src/adapters/` | L1 — uniform CLI invocation (config, placeholders, runner, built-ins) |
+| `src/bridge.ts` | L2 — one `agent` call → one CLI run, with schema handling |
+| `src/scheduler.ts` | L3 — bounded async concurrency + total-agent backstop |
+| `src/primitives.ts`, `src/schema.ts` | L4 — the injected primitives + the data contract |
+| `src/loader.ts` | the transform that turns a workflow script into a runnable form |
+| `src/runtime/` | L5 — background worker, run directory, control |
+| `src/cli.ts` | L6 — the `odw` command |
+| `src/workspace.ts` | cross-cutting — workspace isolation and diff |
 
-## Use as a skill
+Workflow scripts stay **plain `.js`** and are never compiled; the engine is
+written in **TypeScript** (compiled to ESM, **zero runtime dependencies**) and
+ships `.d.ts` authoring types so script authors get editor autocomplete on the
+injected globals.
 
-[`skill/SKILL.md`](skill/SKILL.md) teaches a host agent to author and run
-workflows from documentation alone. Install it into your agent's skills
-directory.
-
-## Develop
+## Install & develop
 
 ```bash
-uv pip install -e '.[test]'
-python -m pytest        # layered suite, driven by a mock adapter — no real accounts
-ruff check src tests
+git clone https://github.com/xz1220/open-dynamic-workflows.git
+cd open-dynamic-workflows
+npm install        # dev tooling only — the published package has zero runtime deps
+npm run build      # tsc → dist/
+npm test           # node:test suite, driven by a mock adapter (no real accounts)
+node dist/cli.js --help
 ```
 
-## Scope
+> Once published, `npm i -g open-dynamic-workflows` (or `npx open-dynamic-workflows …`)
+> will put the `odw` command on your PATH.
 
-v1 covers the core primitives, schema-checked hand-offs, and background
-execution with pause/stop. Resume/journaling, a `budget` primitive, nested
-workflows, raw futures, and git-worktree isolation are intentionally deferred —
-see [`docs/dynamic-workflows-tech-plan.md`](docs/dynamic-workflows-tech-plan.md).
+## Roadmap
+
+This is a milestone-driven rewrite. Each milestone lands green and independently.
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| **M0** | Skeleton: package, strict TS, layered `src/`, CLI shell, test harness | ✅ done |
+| **M1** | Adapters + execution bridge + workspace isolation | ⏳ next |
+| **M2** | Primitives + async scheduler + **the loader/transform** | ⏳ |
+| **M3** | `schema` — structured output (inject / extract / validate / retry) | ⏳ |
+| **M4** | Background runtime + full CLI (`run`/`status`/`logs`/`pause`/`stop`) | ⏳ |
+| **M5** | 🎯 run [`examples/deep-research.js`](examples/deep-research.js) end-to-end | ⏳ |
+| **M6** | Skill doc + references + more examples | ⏳ |
+
+`model` / `agentType`, git-worktree `isolation`, nested `workflow()`, real token
+budget accounting, and resume/journaling are tracked as v1.5+ increments. Full
+plan: [`docs/dynamic-workflows-tech-plan.md`](docs/dynamic-workflows-tech-plan.md).
+Background on the Claude Code dialect ODW aligns with:
+[`docs/dynamic-workflows-research.md`](docs/dynamic-workflows-research.md).
 
 ## License
 
-MIT
+[MIT](LICENSE)
