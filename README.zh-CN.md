@@ -190,6 +190,13 @@ resume/journaling 都作为 v1.5+ 增量。完整方案见
 的 Claude Code 方言背景见
 [`docs/dynamic-workflows-research.md`](docs/dynamic-workflows-research.md)。
 
+## 作为 skill 使用
+
+[`skill/SKILL.md`](skill/SKILL.md) 让宿主 agent 仅凭文档就能编写并运行 workflow
+——把它装进你的 agent 的 skills 目录(Codex CLI → `~/.codex/skills/`,Claude Code
+→ 它的 skills 目录)。[`examples/`](examples/) 下是可运行的 workflow:
+`deep-research.js`、`fan-out-reduce.js`、`adversarial-verify.js`、`loop-until-dry.js`。
+
 ## 许可证
 
 [MIT](LICENSE)

@@ -205,6 +205,14 @@ plan: [`docs/dynamic-workflows-tech-plan.md`](docs/dynamic-workflows-tech-plan.m
 Background on the Claude Code dialect ODW aligns with:
 [`docs/dynamic-workflows-research.md`](docs/dynamic-workflows-research.md).
 
+## Use as a skill
+
+[`skill/SKILL.md`](skill/SKILL.md) teaches a host agent to author and run
+workflows from documentation alone — install it into your agent's skills
+directory (Codex CLI → `~/.codex/skills/`, Claude Code → its skills dir). The
+[`examples/`](examples/) directory holds runnable workflows: `deep-research.js`,
+`fan-out-reduce.js`, `adversarial-verify.js`, `loop-until-dry.js`.
+
 ## License
 
 [MIT](LICENSE)

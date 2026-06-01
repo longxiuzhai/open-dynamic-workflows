@@ -1,36 +1,32 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ODW Flow Console Prototype</title>
+    <title>ODW 动态工作流原型</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <style>
       :root {
-        color-scheme: light;
-        --bg: #f4f7f4;
-        --surface: #ffffff;
-        --surface-alt: #eef4ef;
-        --surface-strong: #16231c;
-        --line: #d7dfd8;
-        --line-strong: #aab8ad;
-        --text: #17231c;
-        --muted: #607069;
-        --faint: #7b8a83;
-        --accent: #2f7d5d;
-        --accent-strong: #1f6047;
-        --accent-soft: #dcebe2;
-        --warning: #b36b1e;
-        --warning-soft: #f7ead5;
-        --danger: #ad3737;
-        --danger-soft: #f6dddd;
-        --ok: #2f7d5d;
-        --ok-soft: #dcebe2;
-        --idle: #6c7680;
-        --idle-soft: #e4e8ea;
-        --shadow: 0 18px 45px rgba(26, 44, 34, 0.08);
-        --radius: 8px;
-        --mono: "SFMono-Regular", "Cascadia Code", "Liberation Mono", Menlo, monospace;
-        --sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --bg: #ffffff;
+        --ink: #111111;
+        --muted: #777777;
+        --line: #ececec;
+        --soft-line: #f4f4f4;
+        --mint: #d7f1e1;
+        --peach: #ffe8d6;
+        --sky: #e0f2fe;
+        --lilac: #f3e8ff;
+        --cream: #fff8dd;
+        --green: #10b981;
+        --shadow: rgba(0, 0, 0, 0.06) 0 20px 60px;
+        --radius: 32px;
+        --sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --soft: "Gaegu", cursive;
       }
 
       * {
@@ -40,1273 +36,776 @@
       body {
         margin: 0;
         min-height: 100dvh;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--ink);
         font-family: var(--sans);
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0)),
-          var(--bg);
-        color: var(--text);
-      }
-
-      button,
-      input {
-        font: inherit;
+        -webkit-font-smoothing: antialiased;
       }
 
       button {
-        cursor: pointer;
+        font: inherit;
       }
 
-      .app {
+      .page {
         min-height: 100dvh;
+        padding: 34px;
         display: grid;
-        grid-template-columns: 248px minmax(0, 1fr);
+        grid-template-columns: 340px minmax(0, 1fr);
+        gap: 26px;
       }
 
-      .rail {
-        border-right: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.72);
-        padding: 18px 14px;
+      .sidebar {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 24px;
+        box-shadow: var(--shadow);
         display: flex;
         flex-direction: column;
-        gap: 22px;
-        position: sticky;
-        top: 0;
-        height: 100dvh;
+        min-height: calc(100dvh - 68px);
       }
 
       .brand {
         display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 4px 6px;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 20px;
+        margin-bottom: 42px;
       }
 
-      .brand-mark {
-        width: 34px;
-        height: 34px;
-        border-radius: var(--radius);
-        background: var(--surface-strong);
-        color: #f8fbf8;
-        display: grid;
-        place-items: center;
-        font-family: var(--mono);
-        font-size: 12px;
+      .brand-name {
+        font-family: var(--soft);
+        font-size: 36px;
         font-weight: 700;
-        letter-spacing: 0;
-      }
-
-      .brand-title {
-        font-size: 15px;
-        font-weight: 720;
+        line-height: 0.9;
         letter-spacing: 0;
       }
 
       .brand-caption {
+        margin-top: 8px;
+        font-size: 13px;
         color: var(--muted);
-        font-size: 12px;
-        margin-top: 1px;
-      }
-
-      .nav {
-        display: grid;
-        gap: 4px;
-      }
-
-      .nav button {
-        border: 0;
-        background: transparent;
-        color: var(--muted);
-        min-height: 36px;
-        border-radius: var(--radius);
-        text-align: left;
-        padding: 0 10px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-
-      .nav button.active {
-        background: var(--surface-alt);
-        color: var(--text);
-        font-weight: 680;
-      }
-
-      .nav-kbd {
-        font-family: var(--mono);
-        font-size: 11px;
-        color: var(--faint);
-      }
-
-      .source-box {
-        margin-top: auto;
-        border: 1px solid var(--line);
-        border-radius: var(--radius);
-        padding: 12px;
-        background: var(--surface);
-      }
-
-      .source-label {
-        color: var(--muted);
-        font-size: 12px;
-        margin-bottom: 7px;
-      }
-
-      .source-path {
-        font-family: var(--mono);
-        font-size: 12px;
         line-height: 1.45;
-        word-break: break-word;
       }
 
-      .page {
-        min-width: 0;
-        padding: 18px;
-      }
-
-      .topbar {
-        min-height: 58px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        margin-bottom: 18px;
-      }
-
-      .page-title {
-        margin: 0;
-        font-size: clamp(24px, 3vw, 34px);
-        line-height: 1.08;
-        letter-spacing: 0;
-      }
-
-      .page-subtitle {
-        color: var(--muted);
-        margin-top: 6px;
-        font-size: 14px;
-      }
-
-      .toolbar {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-      }
-
-      .button {
-        border: 1px solid var(--line-strong);
-        background: var(--surface);
-        color: var(--text);
-        border-radius: var(--radius);
-        min-height: 36px;
-        padding: 0 12px;
+      .live-pill {
         display: inline-flex;
         align-items: center;
         gap: 8px;
+        border-radius: 999px;
+        padding: 8px 12px;
+        background: #f5f5f5;
+        color: #555;
+        font-size: 12px;
         white-space: nowrap;
       }
 
-      .button.primary {
-        background: var(--accent);
-        border-color: var(--accent);
-        color: #ffffff;
-      }
-
-      .button:active {
-        transform: translateY(1px);
-      }
-
-      .icon {
-        width: 16px;
-        height: 16px;
-        border: 1.7px solid currentColor;
+      .live-dot {
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
-        display: inline-block;
-        position: relative;
-        flex: 0 0 auto;
+        background: var(--green);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+        animation: pulse 1.8s infinite;
       }
 
-      .icon.refresh::after {
-        content: "";
-        position: absolute;
-        right: -3px;
-        top: 3px;
-        width: 5px;
-        height: 5px;
-        border-top: 1.7px solid currentColor;
-        border-right: 1.7px solid currentColor;
-        transform: rotate(45deg);
-        background: var(--surface);
-      }
-
-      .icon.play {
-        border-radius: 3px;
-      }
-
-      .icon.play::before {
-        content: "";
-        position: absolute;
-        left: 5px;
-        top: 3px;
-        width: 0;
-        height: 0;
-        border-top: 4px solid transparent;
-        border-bottom: 4px solid transparent;
-        border-left: 6px solid currentColor;
-      }
-
-      .metrics {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
-        margin-bottom: 14px;
-      }
-
-      .metric {
-        background: var(--surface);
-        border: 1px solid var(--line);
-        border-radius: var(--radius);
-        padding: 14px;
-        min-height: 104px;
-        box-shadow: 0 8px 24px rgba(25, 43, 32, 0.04);
-      }
-
-      .metric-label {
+      .section-label {
         color: var(--muted);
         font-size: 12px;
+        margin-bottom: 12px;
       }
 
-      .metric-value {
-        font-size: 30px;
-        font-weight: 760;
-        letter-spacing: 0;
-        margin-top: 8px;
-      }
-
-      .metric-note {
-        color: var(--muted);
-        font-size: 12px;
-        margin-top: 8px;
-      }
-
-      .layout {
+      .flow-list {
         display: grid;
-        grid-template-columns: minmax(300px, 0.86fr) minmax(470px, 1.5fr) minmax(320px, 0.9fr);
-        gap: 14px;
-        align-items: start;
-      }
-
-      .panel {
-        background: rgba(255, 255, 255, 0.92);
-        border: 1px solid var(--line);
-        border-radius: var(--radius);
-        box-shadow: var(--shadow);
-        min-width: 0;
-      }
-
-      .panel-head {
-        padding: 14px;
-        border-bottom: 1px solid var(--line);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
         gap: 12px;
       }
 
-      .panel-title {
-        font-weight: 720;
-        letter-spacing: 0;
-      }
-
-      .panel-subtitle {
-        margin-top: 3px;
-        color: var(--muted);
-        font-size: 12px;
-      }
-
-      .panel-body {
-        padding: 14px;
-      }
-
-      .filters {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-      }
-
-      .filter {
+      .flow {
         border: 1px solid var(--line);
-        background: var(--surface);
-        color: var(--muted);
-        border-radius: 999px;
-        min-height: 28px;
-        padding: 0 10px;
-        font-size: 12px;
-      }
-
-      .filter.active {
-        background: var(--accent-soft);
-        color: var(--accent-strong);
-        border-color: #b7d7c4;
-        font-weight: 700;
-      }
-
-      .run-list {
-        display: grid;
-        gap: 8px;
-      }
-
-      .run-row {
-        border: 1px solid var(--line);
-        border-radius: var(--radius);
-        background: var(--surface);
-        padding: 12px;
-        display: grid;
-        gap: 9px;
-        text-align: left;
-        color: inherit;
-      }
-
-      .run-row.active {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 2px rgba(47, 125, 93, 0.12);
-      }
-
-      .run-main {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 12px;
-      }
-
-      .run-name {
-        font-weight: 720;
-        line-height: 1.25;
-      }
-
-      .run-id {
-        color: var(--muted);
-        font-family: var(--mono);
-        font-size: 11px;
-        margin-top: 4px;
-      }
-
-      .status {
-        border-radius: 999px;
-        min-height: 24px;
-        padding: 0 8px;
-        display: inline-flex;
-        align-items: center;
-        font-size: 12px;
-        font-weight: 700;
-        white-space: nowrap;
-      }
-
-      .status.running,
-      .status.done {
-        color: var(--ok);
-        background: var(--ok-soft);
-      }
-
-      .status.paused,
-      .status.pending {
-        color: var(--warning);
-        background: var(--warning-soft);
-      }
-
-      .status.failed,
-      .status.stopped {
-        color: var(--danger);
-        background: var(--danger-soft);
-      }
-
-      .run-meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 7px;
-        color: var(--muted);
-        font-size: 12px;
-      }
-
-      .runtime-chip {
-        border-radius: 6px;
-        padding: 4px 7px;
-        background: var(--surface-alt);
-        color: var(--text);
-        font-family: var(--mono);
-        font-size: 11px;
-      }
-
-      .bar {
-        height: 7px;
-        border-radius: 999px;
-        background: #e4ebe5;
-        overflow: hidden;
-      }
-
-      .bar span {
-        display: block;
-        height: 100%;
-        background: var(--accent);
-        border-radius: inherit;
-      }
-
-      .detail-hero {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 16px;
+        background: #ffffff;
+        border-radius: 22px;
         padding: 16px;
-        border-bottom: 1px solid var(--line);
-        background:
-          linear-gradient(135deg, rgba(47, 125, 93, 0.12), rgba(255, 255, 255, 0) 48%),
-          var(--surface);
-        border-radius: var(--radius) var(--radius) 0 0;
+        cursor: pointer;
+        text-align: left;
+        transition:
+          transform 0.2s ease,
+          border-color 0.2s ease,
+          box-shadow 0.2s ease;
       }
 
-      .detail-title {
-        margin: 0;
-        font-size: 24px;
-        letter-spacing: 0;
-        line-height: 1.16;
+      .flow:hover {
+        transform: translateY(-2px);
       }
 
-      .detail-desc {
-        color: var(--muted);
-        margin-top: 8px;
-        max-width: 70ch;
-        line-height: 1.5;
-        font-size: 14px;
+      .flow.active {
+        border-color: #111111;
+        box-shadow: rgba(0, 0, 0, 0.08) 0 12px 30px;
       }
 
-      .detail-actions {
+      .flow-title {
         display: flex;
-        gap: 7px;
-        align-items: flex-start;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-      }
-
-      .mini-button {
-        border: 1px solid var(--line-strong);
-        background: rgba(255, 255, 255, 0.86);
-        border-radius: var(--radius);
-        min-height: 32px;
-        padding: 0 10px;
-        color: var(--text);
-      }
-
-      .mini-button.danger {
-        color: var(--danger);
-        border-color: #e2b7b7;
-        background: var(--danger-soft);
-      }
-
-      .detail-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(230px, 0.72fr);
-        gap: 14px;
-        padding: 14px;
-      }
-
-      .subpanel {
-        border: 1px solid var(--line);
-        border-radius: var(--radius);
-        background: var(--surface);
-        min-width: 0;
-      }
-
-      .subpanel-head {
-        padding: 12px;
-        border-bottom: 1px solid var(--line);
-        font-weight: 700;
-      }
-
-      .phase-track {
-        padding: 12px;
-        display: grid;
-        gap: 10px;
-      }
-
-      .phase {
-        display: grid;
-        grid-template-columns: 22px minmax(0, 1fr) auto;
-        gap: 10px;
+        justify-content: space-between;
+        gap: 12px;
         align-items: center;
+        font-weight: 700;
+        font-size: 16px;
       }
 
-      .phase-dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        border: 2px solid var(--line-strong);
-        justify-self: center;
-      }
-
-      .phase.complete .phase-dot {
-        background: var(--accent);
-        border-color: var(--accent);
-      }
-
-      .phase.current .phase-dot {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 4px rgba(47, 125, 93, 0.12);
-      }
-
-      .phase-title {
-        font-weight: 690;
+      .flow-meta {
+        margin-top: 8px;
+        color: var(--muted);
         font-size: 13px;
       }
 
-      .phase-detail {
-        color: var(--muted);
-        font-size: 12px;
-        margin-top: 2px;
-      }
-
-      .phase-count {
-        color: var(--muted);
-        font-family: var(--mono);
-        font-size: 11px;
-      }
-
-      .runtime-map {
-        padding: 12px;
-        display: grid;
-        gap: 9px;
-      }
-
-      .runtime-row {
-        display: grid;
-        grid-template-columns: 86px minmax(0, 1fr) 42px;
-        gap: 10px;
-        align-items: center;
-        font-size: 12px;
-      }
-
-      .runtime-name {
-        font-family: var(--mono);
-        color: var(--text);
-      }
-
-      .runtime-line {
-        height: 8px;
-        border-radius: 999px;
-        background: #e5ebe6;
+      .flow-strip {
+        display: flex;
+        margin-top: 14px;
+        height: 10px;
         overflow: hidden;
+        border-radius: 999px;
+        background: #f2f2f2;
       }
 
-      .runtime-line span {
+      .flow-strip span {
         display: block;
         height: 100%;
-        border-radius: inherit;
-        background: var(--accent);
       }
 
-      .runtime-value {
-        color: var(--muted);
-        font-family: var(--mono);
-        text-align: right;
+      .strip-mint {
+        background: var(--mint);
       }
 
-      .agent-table {
-        width: 100%;
-        border-collapse: collapse;
+      .strip-peach {
+        background: var(--peach);
       }
 
-      .agent-table th,
-      .agent-table td {
-        padding: 10px 12px;
-        border-bottom: 1px solid var(--line);
-        text-align: left;
-        vertical-align: middle;
-        font-size: 12px;
+      .strip-sky {
+        background: var(--sky);
       }
 
-      .agent-table th {
-        color: var(--muted);
-        font-weight: 650;
-        background: #fbfcfb;
+      .strip-lilac {
+        background: var(--lilac);
       }
 
-      .agent-table tr:last-child td {
-        border-bottom: 0;
-      }
-
-      .mono {
-        font-family: var(--mono);
-      }
-
-      .event-list {
-        padding: 12px;
-        display: grid;
-        gap: 9px;
-        max-height: 514px;
-        overflow: auto;
-      }
-
-      .event {
-        display: grid;
-        grid-template-columns: 62px minmax(0, 1fr);
-        gap: 10px;
-        padding-bottom: 9px;
-        border-bottom: 1px solid var(--line);
-      }
-
-      .event:last-child {
-        border-bottom: 0;
-      }
-
-      .event-time {
-        font-family: var(--mono);
-        color: var(--faint);
-        font-size: 11px;
-      }
-
-      .event-type {
-        font-weight: 700;
-        font-size: 12px;
-      }
-
-      .event-copy {
-        color: var(--muted);
-        font-size: 12px;
-        line-height: 1.45;
-        margin-top: 3px;
-      }
-
-      .inspector {
-        padding: 12px;
+      .summary {
+        margin-top: auto;
+        padding-top: 28px;
         display: grid;
         gap: 10px;
-        border-top: 1px solid var(--line);
-        background: #fbfcfb;
-        border-radius: 0 0 var(--radius) var(--radius);
       }
 
-      .kv {
-        display: grid;
-        grid-template-columns: 96px minmax(0, 1fr);
-        gap: 10px;
-        font-size: 12px;
-      }
-
-      .kv span:first-child {
+      .summary-row {
+        display: flex;
+        justify-content: space-between;
         color: var(--muted);
+        font-size: 13px;
+        border-top: 1px solid var(--soft-line);
+        padding-top: 10px;
       }
 
-      .kv span:last-child {
-        min-width: 0;
-        overflow-wrap: anywhere;
+      .summary-row strong {
+        color: var(--ink);
       }
 
-      .runtime-matrix {
-        margin-top: 14px;
-      }
-
-      .adapter-grid {
-        display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 10px;
-      }
-
-      .adapter {
+      .stage {
+        position: relative;
         border: 1px solid var(--line);
         border-radius: var(--radius);
-        padding: 12px;
-        background: var(--surface);
-        display: grid;
-        gap: 8px;
-        min-height: 116px;
+        overflow: hidden;
+        min-height: calc(100dvh - 68px);
+        box-shadow: var(--shadow);
       }
 
-      .adapter-head {
+      .stage-top {
+        position: absolute;
+        top: 28px;
+        left: 32px;
+        right: 32px;
+        z-index: 4;
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        gap: 8px;
+        gap: 24px;
       }
 
-      .adapter-name {
-        font-weight: 720;
+      .title-block {
+        max-width: 520px;
       }
 
-      .adapter-key {
+      .stage-kicker {
+        font-size: 13px;
         color: var(--muted);
-        font-family: var(--mono);
-        font-size: 11px;
-        margin-top: 2px;
+        margin-bottom: 8px;
       }
 
-      .adapter-cmd {
+      h1 {
+        margin: 0;
+        font-family: var(--soft);
+        font-size: clamp(52px, 7vw, 96px);
+        line-height: 0.84;
+        letter-spacing: -1px;
+      }
+
+      .stage-copy {
+        margin-top: 18px;
+        max-width: 460px;
+        color: #666666;
+        line-height: 1.55;
+        font-size: 15px;
+      }
+
+      .mode-card {
+        width: 230px;
+        border-radius: 24px;
+        padding: 16px;
+        background: #f7f7f7;
+      }
+
+      .mode-label {
         color: var(--muted);
-        font-family: var(--mono);
-        font-size: 11px;
-        line-height: 1.45;
-        overflow-wrap: anywhere;
+        font-size: 12px;
+        margin-bottom: 10px;
       }
 
-      .toast {
-        position: fixed;
-        right: 18px;
-        bottom: 18px;
-        min-width: 220px;
-        max-width: 360px;
-        background: var(--surface-strong);
-        color: #f8fbf8;
-        border-radius: var(--radius);
-        padding: 12px 14px;
-        box-shadow: var(--shadow);
-        opacity: 0;
-        transform: translateY(8px);
-        transition: opacity 160ms ease, transform 160ms ease;
+      .mode-value {
+        font-weight: 700;
+        line-height: 1.25;
+      }
+
+      .graph {
+        position: absolute;
+        inset: 0;
+      }
+
+      .wires {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
         pointer-events: none;
-        z-index: 20;
       }
 
-      .toast.show {
-        opacity: 1;
-        transform: translateY(0);
+      .wire {
+        fill: none;
+        stroke: #111111;
+        stroke-width: 1.4;
+        stroke-linecap: round;
+        stroke-dasharray: 7 12;
+        opacity: 0.16;
+        animation: move-wire 6s linear infinite;
       }
 
-      @media (max-width: 1280px) {
-        .layout {
-          grid-template-columns: minmax(300px, 0.9fr) minmax(430px, 1.35fr);
-        }
+      .node {
+        position: absolute;
+        width: 212px;
+        min-height: 138px;
+        border-radius: 30px;
+        padding: 20px;
+        box-shadow: var(--shadow);
+        transition:
+          transform 0.35s cubic-bezier(0.23, 1, 0.32, 1),
+          opacity 0.2s ease;
+      }
 
-        .event-panel {
-          grid-column: 1 / -1;
-        }
+      .node:hover {
+        transform: translateY(-5px) rotate(0deg) scale(1.015);
+      }
 
-        .event-list {
-          max-height: 260px;
-        }
+      .node-label {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: 5px 10px;
+        background: rgba(255, 255, 255, 0.58);
+        font-size: 11px;
+        font-weight: 700;
+        color: #333333;
+      }
 
-        .adapter-grid {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+      .node h2 {
+        margin: 14px 0 0;
+        font-size: 20px;
+        line-height: 1.15;
+      }
+
+      .node p {
+        margin: 8px 0 0;
+        color: #666666;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .node .tiny {
+        margin-top: 16px;
+        font-family: var(--soft);
+        font-size: 21px;
+        line-height: 1;
+        color: rgba(0, 0, 0, 0.45);
+      }
+
+      .node-source {
+        top: 23%;
+        left: 11%;
+        background: var(--sky);
+        transform: rotate(-3deg);
+      }
+
+      .node-plan {
+        top: 18%;
+        right: 17%;
+        background: var(--peach);
+        transform: rotate(2deg);
+      }
+
+      .node-runtime {
+        left: 50%;
+        top: 47%;
+        width: 254px;
+        min-height: 172px;
+        transform: translate(-50%, -50%);
+        background: #ffffff;
+        border: 1px solid var(--line);
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .node-runtime:hover {
+        transform: translate(-50%, -50%) scale(1.015);
+      }
+
+      .runtime-ring {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        border: 1px solid #111111;
+        display: grid;
+        place-items: center;
+        margin-bottom: 14px;
+        position: relative;
+      }
+
+      .runtime-ring::after {
+        content: "";
+        position: absolute;
+        inset: -8px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: inherit;
+        animation: breathe 2.8s ease-in-out infinite;
+      }
+
+      .node-worker {
+        bottom: 18%;
+        left: 17%;
+        background: var(--mint);
+        transform: rotate(4deg);
+      }
+
+      .node-check {
+        bottom: 20%;
+        right: 12%;
+        background: var(--lilac);
+        transform: rotate(-2deg);
+      }
+
+      .note {
+        position: absolute;
+        font-family: var(--soft);
+        font-size: 24px;
+        color: rgba(0, 0, 0, 0.32);
+        pointer-events: none;
+      }
+
+      .note-one {
+        left: 30%;
+        top: 30%;
+        transform: rotate(-8deg);
+      }
+
+      .note-two {
+        right: 27%;
+        bottom: 32%;
+        transform: rotate(6deg);
+      }
+
+      .floating-dot {
+        position: absolute;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #efefef;
+        animation: drift 5s ease-in-out infinite;
+      }
+
+      .dot-a {
+        left: 43%;
+        top: 16%;
+      }
+
+      .dot-b {
+        left: 8%;
+        bottom: 14%;
+        animation-delay: 0.8s;
+      }
+
+      .dot-c {
+        right: 9%;
+        top: 41%;
+        animation-delay: 1.4s;
+      }
+
+      .footer-status {
+        position: absolute;
+        left: 32px;
+        right: 32px;
+        bottom: 28px;
+        z-index: 3;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 18px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .soft-button {
+        border: 0;
+        border-radius: 999px;
+        padding: 13px 20px;
+        background: #111111;
+        color: #ffffff;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: rgba(0, 0, 0, 0.12) 0 12px 26px;
+      }
+
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.38);
+        }
+        70% {
+          box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
         }
       }
 
-      @media (max-width: 920px) {
-        .app {
+      @keyframes move-wire {
+        to {
+          stroke-dashoffset: -76;
+        }
+      }
+
+      @keyframes breathe {
+        0%,
+        100% {
+          transform: scale(1);
+          opacity: 0.35;
+        }
+        50% {
+          transform: scale(1.14);
+          opacity: 0.08;
+        }
+      }
+
+      @keyframes drift {
+        0%,
+        100% {
+          transform: translate(0, 0);
+          opacity: 0.55;
+        }
+        50% {
+          transform: translate(14px, -18px);
+          opacity: 1;
+        }
+      }
+
+      @media (max-width: 1020px) {
+        body {
+          overflow: auto;
+        }
+
+        .page {
           grid-template-columns: 1fr;
+          padding: 18px;
         }
 
-        .rail {
-          position: static;
-          height: auto;
-          border-right: 0;
-          border-bottom: 1px solid var(--line);
+        .sidebar,
+        .stage {
+          min-height: auto;
         }
 
-        .nav {
-          grid-template-columns: repeat(4, minmax(0, 1fr));
+        .stage {
+          height: 760px;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .stage-top,
+        .footer-status {
+          left: 18px;
+          right: 18px;
         }
 
-        .source-box {
-          display: none;
-        }
-
-        .topbar {
-          align-items: flex-start;
+        .stage-top {
           flex-direction: column;
         }
 
-        .toolbar {
-          justify-content: flex-start;
+        .mode-card {
+          width: 100%;
         }
 
-        .metrics,
-        .layout,
-        .detail-grid,
-        .adapter-grid {
-          grid-template-columns: 1fr;
+        .node {
+          width: 180px;
+          min-height: 128px;
+          padding: 16px;
         }
 
-        .detail-hero {
-          grid-template-columns: 1fr;
+        .node-runtime {
+          width: 220px;
         }
 
-        .detail-actions {
-          justify-content: flex-start;
-        }
-      }
-
-      @media (max-width: 560px) {
-        .page {
-          padding: 12px;
+        .node-source {
+          left: 4%;
         }
 
-        .rail {
-          padding: 12px;
+        .node-plan {
+          right: 4%;
+          top: 28%;
         }
 
-        .nav {
-          grid-template-columns: 1fr 1fr;
+        .node-worker {
+          left: 7%;
         }
 
-        .runtime-row {
-          grid-template-columns: 76px minmax(0, 1fr) 34px;
-        }
-
-        .agent-table {
-          display: block;
-          overflow-x: auto;
-          white-space: nowrap;
+        .node-check {
+          right: 4%;
         }
       }
     </style>
   </head>
   <body>
-    <div class="app">
-      <aside class="rail" aria-label="Primary">
+    <main class="page">
+      <aside class="sidebar">
         <div class="brand">
-          <div class="brand-mark">ODW</div>
           <div>
-            <div class="brand-title">Flow Console</div>
-            <div class="brand-caption">Dynamic Goals runtime view</div>
+            <div class="brand-name">ODW</div>
+            <div class="brand-caption">看见动态工作流如何启动、分叉、汇合。</div>
           </div>
+          <div class="live-pill"><span class="live-dot"></span>运行中</div>
         </div>
 
-        <nav class="nav" aria-label="Sections">
-          <button class="active" type="button">Flows <span class="nav-kbd">1</span></button>
-          <button type="button">Runtimes <span class="nav-kbd">2</span></button>
-          <button type="button">Events <span class="nav-kbd">3</span></button>
-          <button type="button">Controls <span class="nav-kbd">4</span></button>
-        </nav>
+        <div class="section-label">正在运行的动态工作流</div>
+        <div class="flow-list" id="flowList"></div>
 
-        <div class="source-box">
-          <div class="source-label">Run store</div>
-          <div class="source-path">~/.odw/runs</div>
-        </div>
+        <div class="summary" id="summary"></div>
       </aside>
 
-      <main class="page">
-        <header class="topbar">
-          <div>
-            <h1 class="page-title">Dynamic Goals Flow Console</h1>
-            <div class="page-subtitle">Running flows, agent runtime routing, and progress events in one operational view.</div>
-          </div>
-          <div class="toolbar">
-            <button class="button" type="button" data-action="refresh"><span class="icon refresh"></span>Refresh</button>
-            <button class="button primary" type="button" data-action="new-flow"><span class="icon play"></span>New flow</button>
-          </div>
-        </header>
-
-        <section class="metrics" aria-label="Summary metrics">
-          <div class="metric">
-            <div class="metric-label">Active flows</div>
-            <div class="metric-value" id="metric-active">0</div>
-            <div class="metric-note">running or paused</div>
-          </div>
-          <div class="metric">
-            <div class="metric-label">Agent processes</div>
-            <div class="metric-value" id="metric-agents">0</div>
-            <div class="metric-note">in flight now</div>
-          </div>
-          <div class="metric">
-            <div class="metric-label">Default runtime</div>
-            <div class="metric-value" id="metric-runtime">claude</div>
-            <div class="metric-note">from odw.config.json</div>
-          </div>
-          <div class="metric">
-            <div class="metric-label">Dispatch cap</div>
-            <div class="metric-value">16</div>
-            <div class="metric-note">auto concurrency limit</div>
-          </div>
-        </section>
-
-        <div class="layout">
-          <section class="panel" aria-label="Flow list">
-            <div class="panel-head">
-              <div>
-                <div class="panel-title">Flow queue</div>
-                <div class="panel-subtitle">One row per run directory</div>
-              </div>
-              <div class="filters" aria-label="Flow filters">
-                <button class="filter active" type="button" data-filter="all">All</button>
-                <button class="filter" type="button" data-filter="running">Live</button>
-                <button class="filter" type="button" data-filter="done">Done</button>
-                <button class="filter" type="button" data-filter="failed">Needs eye</button>
-              </div>
+      <section class="stage" aria-label="动态工作流可视化">
+        <div class="stage-top">
+          <div class="title-block">
+            <div class="stage-kicker">Dynamic Workflow Map</div>
+            <h1 id="headline">flow is<br />moving</h1>
+            <div class="stage-copy" id="description">
+              一个 workflow run 会把任务展开成多个节点。这里先只看运行形态，不展示输入细节。
             </div>
-            <div class="panel-body">
-              <div class="run-list" id="run-list"></div>
-            </div>
-          </section>
-
-          <section class="panel" aria-label="Selected flow">
-            <div id="detail"></div>
-          </section>
-
-          <aside class="panel event-panel" aria-label="Event stream">
-            <div class="panel-head">
-              <div>
-                <div class="panel-title">Event stream</div>
-                <div class="panel-subtitle">events.jsonl tail</div>
-              </div>
-              <button class="mini-button" type="button" data-action="follow">Follow</button>
-            </div>
-            <div class="event-list" id="events"></div>
-            <div class="inspector" id="inspector"></div>
-          </aside>
+          </div>
+          <div class="mode-card">
+            <div class="mode-label">当前形态</div>
+            <div class="mode-value" id="modeText">扇出研究节点，然后回到综合节点。</div>
+          </div>
         </div>
 
-        <section class="panel runtime-matrix" aria-label="Runtime matrix">
-          <div class="panel-head">
-            <div>
-              <div class="panel-title">Agent runtime map</div>
-              <div class="panel-subtitle">Configured adapters and current assignment pressure</div>
-            </div>
-          </div>
-          <div class="panel-body">
-            <div class="adapter-grid" id="adapter-grid"></div>
-          </div>
-        </section>
-      </main>
-    </div>
+        <div class="graph">
+          <svg class="wires" viewBox="0 0 1000 700" preserveAspectRatio="none" aria-hidden="true">
+            <path class="wire" d="M220 250 C360 190, 445 250, 500 330"></path>
+            <path class="wire" d="M780 230 C640 188, 555 245, 500 330"></path>
+            <path class="wire" d="M500 330 C385 425, 300 455, 260 530"></path>
+            <path class="wire" d="M500 330 C640 410, 720 450, 790 520"></path>
+          </svg>
 
-    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+          <article class="node node-source">
+            <span class="node-label" id="nodeOneLabel">Script</span>
+            <h2 id="nodeOneTitle">读取 workflow</h2>
+            <p id="nodeOneCopy">解析 meta，建立运行上下文。</p>
+            <div class="tiny" id="nodeOneTiny">ready</div>
+          </article>
+
+          <article class="node node-plan">
+            <span class="node-label" id="nodeTwoLabel">Plan</span>
+            <h2 id="nodeTwoTitle">拆成节点</h2>
+            <p id="nodeTwoCopy">把阶段拆开，决定哪些可以并发。</p>
+            <div class="tiny" id="nodeTwoTiny">fan out</div>
+          </article>
+
+          <article class="node node-runtime">
+            <div class="runtime-ring">ODW</div>
+            <h2 id="centerTitle">运行时调度</h2>
+            <p id="centerCopy">控制并发、记录事件、等待节点返回。</p>
+          </article>
+
+          <article class="node node-worker">
+            <span class="node-label" id="nodeThreeLabel">Agents</span>
+            <h2 id="nodeThreeTitle">多个 Agent 节点</h2>
+            <p id="nodeThreeCopy">不同节点被派发到不同 runtime。</p>
+            <div class="tiny" id="nodeThreeTiny">12 active</div>
+          </article>
+
+          <article class="node node-check">
+            <span class="node-label" id="nodeFourLabel">Merge</span>
+            <h2 id="nodeFourTitle">汇合结果</h2>
+            <p id="nodeFourCopy">筛掉失败节点，进入最终综合。</p>
+            <div class="tiny" id="nodeFourTiny">62%</div>
+          </article>
+
+          <div class="note note-one">parallel nodes</div>
+          <div class="note note-two">back to one result</div>
+          <div class="floating-dot dot-a"></div>
+          <div class="floating-dot dot-b"></div>
+          <div class="floating-dot dot-c"></div>
+        </div>
+
+        <div class="footer-status">
+          <div id="footerText">当前 3 个 workflow 正在运行，17 个节点已启动。</div>
+          <button class="soft-button" type="button" id="shuffleButton">切换视图</button>
+        </div>
+      </section>
+    </main>
 
     <script>
-      const runs = [
+      const flows = [
         {
-          id: "20260601-214822-a91c2f",
-          name: "deep-research",
-          state: "running",
-          description: "Fan-out web research with adversarial fact-checking and cited synthesis.",
-          args: "question: portable multi-agent workflows",
-          defaultRuntime: "claude",
-          source: "/Users/danielxing/repos/open-dynamic-workflows",
-          started: "21:48",
-          updated: "22:03",
-          activeAgents: 7,
-          dispatched: 31,
-          progress: 62,
-          currentPhase: "Verify",
-          phases: [
-            ["Plan", "question decomposition", "complete", 1],
-            ["Gather", "source search and claim extraction", "complete", 18],
-            ["Verify", "adversarial fact checks", "current", 9],
-            ["Synthesize", "cited report", "pending", 0],
-            ["Critique", "gap analysis", "pending", 0],
+          id: "research",
+          title: "深度研究工作流",
+          meta: "5 个阶段 · 17 个节点 · 62%",
+          colors: [42, 28, 20, 10],
+          headline: "research<br />is moving",
+          description: "从一个问题开始，先规划角度，再并发收集、交叉验证，最后汇合成报告。",
+          mode: "扇出研究节点，然后回到综合节点。",
+          nodes: [
+            ["Question", "接收问题", "只记录目标，不展开输入细节。", "seed"],
+            ["Plan", "规划角度", "把问题拆成多个互补方向。", "5 paths"],
+            ["Agents", "并发搜索", "多个节点同时访问不同来源。", "12 active"],
+            ["Merge", "交叉验证", "把证据重新汇合，过滤不稳的结论。", "62%"],
           ],
-          runtimes: { claude: 18, codex: 7, gemini: 4, qwen: 2, kimi: 0 },
-          agents: [
-            ["verify:primary-source check", "claude", "Verify", "running", "02:14"],
-            ["verify:recency & currency", "codex", "Verify", "running", "01:42"],
-            ["verify:contradicting evidence", "gemini", "Verify", "done", "00:58"],
-            ["extract:ecosystem", "claude", "Gather", "done", "03:06"],
-          ],
-          events: [
-            ["22:03", "agent_started", "verify:primary-source check started on Claude Code."],
-            ["22:02", "agent_finished", "extract:ecosystem returned 8 cited claims."],
-            ["22:00", "log", "17 key or uncertain claims selected for verification."],
-            ["21:58", "phase_started", "Verify phase opened."],
-            ["21:55", "agent_finished", "search:recent-developments completed on Gemini CLI."],
-          ],
+          footer: "深度研究工作流正在运行，12 个节点活跃，5 个节点已完成。",
         },
         {
-          id: "20260601-211610-c441ac",
-          name: "migration-review",
-          state: "paused",
-          description: "Scan migration plan, split by risk area, and verify findings with a judge panel.",
-          args: "repo: billing-service",
-          defaultRuntime: "codex",
-          source: "/Users/danielxing/repos/billing-service",
-          started: "21:16",
-          updated: "21:45",
-          activeAgents: 0,
-          dispatched: 12,
-          progress: 44,
-          currentPhase: "Review",
-          phases: [
-            ["Plan", "risk taxonomy", "complete", 1],
-            ["Review", "parallel area reviews", "current", 11],
-            ["Verify", "judge panel", "pending", 0],
-            ["Synthesize", "patch guidance", "pending", 0],
+          id: "migration",
+          title: "迁移审查工作流",
+          meta: "4 个阶段 · 9 个节点 · 48%",
+          colors: [30, 34, 18, 8],
+          headline: "review<br />in layers",
+          description: "把迁移风险拆成结构、数据、权限和发布路径，再让节点分别审查。",
+          mode: "分层审查节点并行推进，后面进入统一判断。",
+          nodes: [
+            ["Scope", "确定范围", "识别这次迁移覆盖哪些区域。", "locked"],
+            ["Review", "分层审查", "节点按风险面独立运行。", "9 nodes"],
+            ["Agents", "runtime 派发", "审查节点被分配到不同 agent。", "6 active"],
+            ["Merge", "生成结论", "保留高置信问题，等待综合。", "48%"],
           ],
-          runtimes: { codex: 8, claude: 2, qwen: 2, gemini: 0, kimi: 0 },
-          agents: [
-            ["review:data-model", "codex", "Review", "paused", "04:11"],
-            ["review:auth-paths", "qwen", "Review", "done", "02:28"],
-            ["review:rollout-risk", "claude", "Review", "done", "03:02"],
-          ],
-          events: [
-            ["21:45", "run_paused", "Pause requested through control.json."],
-            ["21:43", "agent_finished", "review:auth-paths returned 3 findings."],
-            ["21:37", "phase_started", "Review phase opened."],
-          ],
+          footer: "迁移审查工作流正在运行，6 个节点活跃，3 个节点已完成。",
         },
         {
-          id: "20260601-204312-6e03d1",
-          name: "adapter-smoke",
-          state: "done",
-          description: "Run a minimal prompt across configured CLI adapters and collect stdout.",
-          args: "mode: smoke",
-          defaultRuntime: "claude",
-          source: "/Users/danielxing/repos/open-dynamic-workflows",
-          started: "20:43",
-          updated: "20:48",
-          activeAgents: 0,
-          dispatched: 5,
-          progress: 100,
-          currentPhase: "Result",
-          phases: [
-            ["Dispatch", "adapter smoke prompts", "complete", 5],
-            ["Result", "stdout capture", "complete", 5],
+          id: "release",
+          title: "发布检查工作流",
+          meta: "3 个阶段 · 6 个节点 · 71%",
+          colors: [22, 18, 38, 12],
+          headline: "release<br />almost ready",
+          description: "围绕测试、文档、变更摘要和风险说明启动检查节点。",
+          mode: "检查节点更少，路径更短，重点是快速汇合。",
+          nodes: [
+            ["Input", "读取变更", "从当前工作区识别发布内容。", "ready"],
+            ["Check", "检查节点", "测试、文档、风险说明同时跑。", "6 nodes"],
+            ["Agents", "轻量派发", "节点小而快，等待最后两个返回。", "2 active"],
+            ["Merge", "发布摘要", "汇合成一个可读的发布判断。", "71%"],
           ],
-          runtimes: { codex: 1, claude: 1, gemini: 1, qwen: 1, kimi: 1 },
-          agents: [
-            ["smoke:codex", "codex", "Dispatch", "done", "00:17"],
-            ["smoke:claude", "claude", "Dispatch", "done", "00:13"],
-            ["smoke:gemini", "gemini", "Dispatch", "done", "00:20"],
-          ],
-          events: [
-            ["20:48", "run_finished", "All configured adapters produced output."],
-            ["20:47", "agent_finished", "smoke:kimi completed."],
-            ["20:43", "run_started", "Worker process attached to run directory."],
-          ],
-        },
-        {
-          id: "20260601-193028-b7d9cc",
-          name: "schema-retry-check",
-          state: "failed",
-          description: "Exercise structured output retries against a strict JSON Schema.",
-          args: "schema: report",
-          defaultRuntime: "qwen",
-          source: "/Users/danielxing/repos/open-dynamic-workflows",
-          started: "19:30",
-          updated: "19:36",
-          activeAgents: 0,
-          dispatched: 4,
-          progress: 71,
-          currentPhase: "Validate",
-          phases: [
-            ["Dispatch", "mock dirty reply", "complete", 1],
-            ["Validate", "schema retry loop", "current", 3],
-            ["Result", "persist object", "pending", 0],
-          ],
-          runtimes: { qwen: 4, codex: 0, claude: 0, gemini: 0, kimi: 0 },
-          agents: [
-            ["schema:attempt-1", "qwen", "Validate", "failed", "00:21"],
-            ["schema:attempt-2", "qwen", "Validate", "failed", "00:25"],
-            ["schema:attempt-3", "qwen", "Validate", "failed", "00:24"],
-          ],
-          events: [
-            ["19:36", "run_failed", "SchemaValidationError after 3 attempts."],
-            ["19:35", "agent_failed", "schema:attempt-3 returned prose instead of JSON."],
-            ["19:31", "phase_started", "Validate phase opened."],
-          ],
+          footer: "发布检查工作流接近完成，2 个节点活跃，4 个节点已完成。",
         },
       ];
 
-      const adapters = [
-        ["claude", "Claude Code", "claude --print ...", "ready", 21],
-        ["codex", "Codex CLI", "codex exec --cd {workspace} -", "ready", 16],
-        ["gemini", "Gemini CLI", "gemini --approval-mode auto_edit", "ready", 6],
-        ["qwen", "Qwen Code", "qwen --output-format text", "retrying", 6],
-        ["kimi", "Kimi CLI", "kimi --work-dir {workspace}", "idle", 1],
+      let active = 0;
+
+      const ids = [
+        "nodeOneLabel",
+        "nodeOneTitle",
+        "nodeOneCopy",
+        "nodeOneTiny",
+        "nodeTwoLabel",
+        "nodeTwoTitle",
+        "nodeTwoCopy",
+        "nodeTwoTiny",
+        "nodeThreeLabel",
+        "nodeThreeTitle",
+        "nodeThreeCopy",
+        "nodeThreeTiny",
+        "nodeFourLabel",
+        "nodeFourTitle",
+        "nodeFourCopy",
+        "nodeFourTiny",
       ];
 
-      let selected = runs[0].id;
-      let filter = "all";
+      function renderList() {
+        const list = document.getElementById("flowList");
+        list.innerHTML = flows
+          .map(
+            (flow, index) => `
+              <button class="flow ${index === active ? "active" : ""}" type="button" data-index="${index}">
+                <div class="flow-title">
+                  <span>${flow.title}</span>
+                  <span class="live-pill"><span class="live-dot"></span>live</span>
+                </div>
+                <div class="flow-meta">${flow.meta}</div>
+                <div class="flow-strip">
+                  <span class="strip-mint" style="width:${flow.colors[0]}%"></span>
+                  <span class="strip-peach" style="width:${flow.colors[1]}%"></span>
+                  <span class="strip-sky" style="width:${flow.colors[2]}%"></span>
+                  <span class="strip-lilac" style="width:${flow.colors[3]}%"></span>
+                </div>
+              </button>
+            `,
+          )
+          .join("");
 
-      const byId = (id) => document.getElementById(id);
-      const stateLabel = (state) => state.replace("-", " ");
-
-      function visibleRuns() {
-        if (filter === "all") return runs;
-        if (filter === "running") return runs.filter((run) => run.state === "running" || run.state === "paused");
-        if (filter === "failed") return runs.filter((run) => run.state === "failed" || run.state === "stopped");
-        return runs.filter((run) => run.state === filter);
-      }
-
-      function renderMetrics() {
-        byId("metric-active").textContent = runs.filter((run) => run.state === "running" || run.state === "paused").length;
-        byId("metric-agents").textContent = runs.reduce((sum, run) => sum + run.activeAgents, 0);
-        byId("metric-runtime").textContent = runs[0].defaultRuntime;
-      }
-
-      function renderRunList() {
-        const list = byId("run-list");
-        list.innerHTML = "";
-        for (const run of visibleRuns()) {
-          const row = document.createElement("button");
-          row.className = "run-row" + (run.id === selected ? " active" : "");
-          row.type = "button";
-          row.innerHTML = `
-            <div class="run-main">
-              <div>
-                <div class="run-name">${run.name}</div>
-                <div class="run-id">${run.id}</div>
-              </div>
-              <span class="status ${run.state}">${stateLabel(run.state)}</span>
-            </div>
-            <div class="run-meta">
-              <span>${run.currentPhase}</span>
-              <span>${run.dispatched} agents</span>
-              <span>${run.started} start</span>
-              <span class="runtime-chip">${run.defaultRuntime}</span>
-            </div>
-            <div class="bar" aria-label="${run.progress} percent complete"><span style="width:${run.progress}%"></span></div>
-          `;
-          row.addEventListener("click", () => {
-            selected = run.id;
+        list.querySelectorAll(".flow").forEach((button) => {
+          button.addEventListener("click", () => {
+            active = Number(button.dataset.index);
             render();
           });
-          list.appendChild(row);
-        }
+        });
       }
 
-      function renderDetail() {
-        const run = runs.find((item) => item.id === selected) || runs[0];
-        const totalRuntime = Object.values(run.runtimes).reduce((sum, value) => sum + value, 0) || 1;
-        byId("detail").innerHTML = `
-          <div class="detail-hero">
-            <div>
-              <h2 class="detail-title">${run.name}</h2>
-              <div class="detail-desc">${run.description}</div>
-            </div>
-            <div class="detail-actions">
-              <button class="mini-button" type="button" data-action="pause">Pause</button>
-              <button class="mini-button" type="button" data-action="resume">Resume</button>
-              <button class="mini-button danger" type="button" data-action="stop">Stop</button>
-            </div>
-          </div>
-          <div class="detail-grid">
-            <div class="subpanel">
-              <div class="subpanel-head">Phase path</div>
-              <div class="phase-track">
-                ${run.phases.map(([title, detail, state, count]) => `
-                  <div class="phase ${state}">
-                    <span class="phase-dot"></span>
-                    <div>
-                      <div class="phase-title">${title}</div>
-                      <div class="phase-detail">${detail}</div>
-                    </div>
-                    <span class="phase-count">${count}</span>
-                  </div>
-                `).join("")}
-              </div>
-            </div>
-            <div class="subpanel">
-              <div class="subpanel-head">Runtime mix</div>
-              <div class="runtime-map">
-                ${Object.entries(run.runtimes).map(([name, count]) => `
-                  <div class="runtime-row">
-                    <span class="runtime-name">${name}</span>
-                    <span class="runtime-line"><span style="width:${Math.max(4, Math.round((count / totalRuntime) * 100))}%"></span></span>
-                    <span class="runtime-value">${count}</span>
-                  </div>
-                `).join("")}
-              </div>
-            </div>
-          </div>
-          <div class="subpanel" style="margin:0 14px 14px">
-            <div class="subpanel-head">Agent calls</div>
-            <table class="agent-table">
-              <thead>
-                <tr>
-                  <th>Label</th>
-                  <th>Runtime</th>
-                  <th>Phase</th>
-                  <th>State</th>
-                  <th>Elapsed</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${run.agents.map(([label, runtime, phase, state, elapsed]) => `
-                  <tr>
-                    <td class="mono">${label}</td>
-                    <td>${runtime}</td>
-                    <td>${phase}</td>
-                    <td><span class="status ${state}">${state}</span></td>
-                    <td class="mono">${elapsed}</td>
-                  </tr>
-                `).join("")}
-              </tbody>
-            </table>
-          </div>
-        `;
-      }
+      function renderStage() {
+        const flow = flows[active];
+        document.getElementById("headline").innerHTML = flow.headline;
+        document.getElementById("description").textContent = flow.description;
+        document.getElementById("modeText").textContent = flow.mode;
+        document.getElementById("footerText").textContent = flow.footer;
 
-      function renderEvents() {
-        const run = runs.find((item) => item.id === selected) || runs[0];
-        byId("events").innerHTML = run.events.map(([time, type, message]) => `
-          <div class="event">
-            <div class="event-time">${time}</div>
-            <div>
-              <div class="event-type">${type}</div>
-              <div class="event-copy">${message}</div>
-            </div>
-          </div>
-        `).join("");
-        byId("inspector").innerHTML = `
-          <div class="kv"><span>run_id</span><span class="mono">${run.id}</span></div>
-          <div class="kv"><span>source</span><span class="mono">${run.source}</span></div>
-          <div class="kv"><span>args</span><span>${run.args}</span></div>
-          <div class="kv"><span>updated</span><span>${run.updated}</span></div>
-        `;
-      }
-
-      function renderAdapters() {
-        byId("adapter-grid").innerHTML = adapters.map(([key, name, command, state, count]) => `
-          <div class="adapter">
-            <div class="adapter-head">
-              <div>
-                <div class="adapter-name">${name}</div>
-                <div class="adapter-key">${key}</div>
-              </div>
-              <span class="status ${state === "ready" ? "done" : state === "retrying" ? "paused" : "pending"}">${state}</span>
-            </div>
-            <div class="adapter-cmd">${command}</div>
-            <div class="bar"><span style="width:${Math.min(100, count * 4)}%"></span></div>
-          </div>
-        `).join("");
-      }
-
-      function toast(message) {
-        const node = byId("toast");
-        node.textContent = message;
-        node.classList.add("show");
-        window.clearTimeout(toast.timer);
-        toast.timer = window.setTimeout(() => node.classList.remove("show"), 1700);
-      }
-
-      function bindControls() {
-        document.querySelectorAll("[data-filter]").forEach((button) => {
-          button.addEventListener("click", () => {
-            filter = button.dataset.filter;
-            document.querySelectorAll("[data-filter]").forEach((node) => node.classList.toggle("active", node === button));
-            renderRunList();
-          });
+        const flat = flow.nodes.flat();
+        ids.forEach((id, index) => {
+          document.getElementById(id).textContent = flat[index];
         });
 
-        document.body.addEventListener("click", (event) => {
-          const button = event.target.closest("[data-action]");
-          if (!button) return;
-          const action = button.dataset.action;
-          const copy = {
-            refresh: "Run store refreshed from mock data.",
-            "new-flow": "New flow launcher would open here.",
-            follow: "Following the selected events stream.",
-            pause: "Pause request would write control.json.",
-            resume: "Resume request would clear pause state.",
-            stop: "Stop request would write control.json.",
-          };
-          toast(copy[action] || "Action queued.");
-        });
+        document.getElementById("summary").innerHTML = `
+          <div class="summary-row"><span>运行中</span><strong>${flows.length}</strong></div>
+          <div class="summary-row"><span>已启动节点</span><strong>32</strong></div>
+          <div class="summary-row"><span>当前视图</span><strong>${flow.title}</strong></div>
+        `;
       }
 
       function render() {
-        renderMetrics();
-        renderRunList();
-        renderDetail();
-        renderEvents();
-        renderAdapters();
+        renderList();
+        renderStage();
       }
 
-      bindControls();
+      document.getElementById("shuffleButton").addEventListener("click", () => {
+        active = (active + 1) % flows.length;
+        render();
+      });
+
       render();
     </script>
   </body>
