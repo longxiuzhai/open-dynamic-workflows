@@ -7,7 +7,6 @@
  * the run directory. Run state lives on disk, so the CLI and worker stay fully
  * decoupled.
  *
- * Commands (most are wired up in M4/M5):
  *   odw run <script.js> [--args JSON|@file] [--wait]
  *   odw list
  *   odw status <run_id>
@@ -16,9 +15,16 @@
  *   odw pause|resume|stop <run_id>
  */
 
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
+import { basename } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
+
+import { loadConfig, resolveRunsRoot } from "./adapters/config.js";
+import type { WorkflowEvent } from "./events.js";
 import { VERSION } from "./index.js";
+import { startRun, waitFor } from "./runtime/launcher.js";
+import { RunStore, TERMINAL_STATES } from "./runtime/run-store.js";
 
 export const COMMANDS = [
   "run",
@@ -32,6 +38,8 @@ export const COMMANDS = [
 ] as const;
 
 export type Command = (typeof COMMANDS)[number];
+
+const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export function versionText(): string {
   return `open-dynamic-workflows ${VERSION}`;
@@ -51,8 +59,12 @@ export function helpText(): string {
     "  odw pause|resume|stop <run_id>                     control a running workflow",
     "",
     "Options:",
-    "  -h, --help       show this help",
-    "  -v, --version    show the version",
+    "  --args JSON|@file   workflow input (JSON, @file.json, or a raw string)",
+    "  --config <path>     path to an odw.config.json",
+    "  --runs-root <dir>   directory runs are stored under",
+    "  --wait              block until the run finishes and print the result",
+    "  -h, --help          show this help",
+    "  -v, --version       show the version",
   ].join("\n");
 }
 
@@ -68,26 +80,233 @@ export async function main(argv: string[]): Promise<number> {
     process.stdout.write(versionText() + "\n");
     return 0;
   }
-  if (!(COMMANDS as readonly string[]).includes(command)) {
-    process.stderr.write(`odw: unknown command '${command}'\n\n`);
-    process.stderr.write(helpText() + "\n");
+
+  try {
+    switch (command) {
+      case "run":
+        return await cmdRun(rest);
+      case "status":
+        return cmdStatus(rest);
+      case "result":
+        return cmdResult(rest);
+      case "logs":
+        return await cmdLogs(rest);
+      case "list":
+        return cmdList(rest);
+      case "pause":
+      case "resume":
+      case "stop":
+        return cmdControl(command, rest);
+      default:
+        process.stderr.write(`odw: unknown command '${command}'\n\n${helpText()}\n`);
+        return 2;
+    }
+  } catch (err) {
+    process.stderr.write(`odw: ${(err as Error).message}\n`);
+    return 1;
+  }
+}
+
+// --- commands ----------------------------------------------------------------
+
+async function cmdRun(rest: string[]): Promise<number> {
+  const { values, positionals } = parseArgs({
+    args: rest,
+    allowPositionals: true,
+    options: {
+      args: { type: "string" },
+      config: { type: "string" },
+      "runs-root": { type: "string" },
+      source: { type: "string" },
+      wait: { type: "boolean" },
+      timeout: { type: "string" },
+      budget: { type: "string" },
+    },
+  });
+  const script = positionals[0];
+  if (!script) {
+    process.stderr.write("odw run: missing <script.js>\n");
     return 2;
   }
 
-  // Commands land in M4 (runtime + CLI) and M5 (end-to-end). Until then, fail
-  // loudly rather than pretending to do work.
-  void rest;
-  process.stderr.write(
-    `odw: '${command}' is not wired up yet — the runtime lands in milestone M4/M5.\n`,
-  );
+  const { runId, store } = startRun(script, {
+    args: parseArgsValue(values.args),
+    configPath: values.config ?? null,
+    runsRoot: values["runs-root"] ?? null,
+    source: values.source ?? null,
+    budgetTotal: values.budget !== undefined ? Number(values.budget) : null,
+  });
+
+  if (!values.wait) {
+    process.stdout.write(runId + "\n");
+    process.stderr.write(`started run ${runId} (use 'odw status ${runId}')\n`);
+    return 0;
+  }
+
+  process.stderr.write(`running ${runId} ...\n`);
+  const status = await waitFor(store, runId, {
+    timeoutMs: values.timeout ? Number(values.timeout) * 1000 : undefined,
+  });
+  return reportTerminal(store, runId, status);
+}
+
+function cmdStatus(rest: string[]): number {
+  const { store, runId } = storeAndRun(rest);
+  if (!store) return runId ? 1 : 2;
+  const status = store.readStatus(runId);
+  const meta = store.readMeta(runId);
+  const name = (status.name as string) || baseName(meta.script as string | undefined);
+  process.stdout.write(`${runId}  [${status.state ?? "?"}]  ${name}\n`);
+  if (status.description) process.stdout.write(`  ${status.description as string}\n`);
+  process.stdout.write(`  dispatched: ${status.dispatched ?? 0} agent(s)\n`);
+  return 0;
+}
+
+function cmdResult(rest: string[]): number {
+  const { store, runId } = storeAndRun(rest);
+  if (!store) return runId ? 1 : 2;
+  return reportTerminal(store, runId, store.readStatus(runId));
+}
+
+async function cmdLogs(rest: string[]): Promise<number> {
+  const { values, positionals } = parseArgs({
+    args: rest,
+    allowPositionals: true,
+    options: {
+      config: { type: "string" },
+      "runs-root": { type: "string" },
+      follow: { type: "boolean" },
+    },
+  });
+  const runId = positionals[0];
+  if (!runId) {
+    process.stderr.write("missing <run_id>\n");
+    return 2;
+  }
+  const store = storeFrom(values);
+  if (!store.exists(runId)) {
+    process.stderr.write(`no such run: ${runId}\n`);
+    return 1;
+  }
+  let seen = 0;
+  for (;;) {
+    const events = store.readEvents(runId);
+    for (const ev of events.slice(seen)) process.stdout.write(formatEvent(ev) + "\n");
+    seen = events.length;
+    if (!values.follow) return 0;
+    if (TERMINAL_STATES.has(store.readStatus(runId).state as string)) return 0;
+    await delay(300);
+  }
+}
+
+function cmdList(rest: string[]): number {
+  const { values } = parseArgs({
+    args: rest,
+    allowPositionals: true,
+    options: { config: { type: "string" }, "runs-root": { type: "string" } },
+  });
+  const store = storeFrom(values);
+  const runs = store.listRuns();
+  if (runs.length === 0) {
+    process.stderr.write("no runs found\n");
+    return 0;
+  }
+  for (const runId of runs) {
+    const status = store.readStatus(runId);
+    process.stdout.write(`${runId}  ${String(status.state ?? "?").padEnd(8)}  ${status.name ?? ""}\n`);
+  }
+  return 0;
+}
+
+function cmdControl(action: Command, rest: string[]): number {
+  const { store, runId } = storeAndRun(rest);
+  if (!store) return runId ? 1 : 2;
+  store.writeControl(runId, action);
+  process.stderr.write(`${action} requested for ${runId}\n`);
+  return 0;
+}
+
+// --- helpers -----------------------------------------------------------------
+
+interface StoreFlags {
+  config?: string;
+  "runs-root"?: string;
+}
+
+function storeFrom(values: StoreFlags): RunStore {
+  if (values["runs-root"]) return new RunStore(values["runs-root"]);
+  return new RunStore(resolveRunsRoot(loadConfig(values.config ?? null).settings.runsRoot));
+}
+
+/** Parse `<run_id>` + store flags; returns null store with a printed error on failure. */
+function storeAndRun(rest: string[]): { store: RunStore | null; runId: string } {
+  const { values, positionals } = parseArgs({
+    args: rest,
+    allowPositionals: true,
+    options: { config: { type: "string" }, "runs-root": { type: "string" } },
+  });
+  const runId = positionals[0];
+  if (!runId) {
+    process.stderr.write("missing <run_id>\n");
+    return { store: null, runId: "" };
+  }
+  const store = storeFrom(values);
+  if (!store.exists(runId)) {
+    process.stderr.write(`no such run: ${runId}\n`);
+    return { store: null, runId };
+  }
+  return { store, runId };
+}
+
+function reportTerminal(store: RunStore, runId: string, status: Record<string, unknown>): number {
+  const state = status.state;
+  if (state === "done") {
+    process.stdout.write(JSON.stringify(store.readResult(runId), null, 2) + "\n");
+    return 0;
+  }
+  if (state === "failed") {
+    const error = store.readError(runId) ?? {};
+    process.stderr.write(`run failed: ${error.error ?? "unknown error"}\n`);
+    return 1;
+  }
+  if (state === "stopped") {
+    process.stderr.write("run was stopped before completion\n");
+    return 1;
+  }
+  process.stderr.write(`run is still '${String(state)}'; not finished\n`);
   return 1;
 }
 
-export function isCliEntrypoint(argvEntry: string | undefined, moduleUrl = import.meta.url): boolean {
-  if (!argvEntry) {
-    return false;
+function parseArgsValue(raw?: string): unknown {
+  if (raw === undefined) return null;
+  const text = raw.startsWith("@") ? readFileSync(raw.slice(1), "utf8") : raw;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text; // a plain string that isn't JSON, e.g. --args hello
   }
+}
 
+function formatEvent(ev: WorkflowEvent): string {
+  const stamp = new Date(((ev.ts as number) ?? 0) * 1000).toLocaleTimeString();
+  const type = String(ev.type ?? "?");
+  const phase = ev.phase ? ` (${String(ev.phase)})` : "";
+  let detail = "";
+  if (type === "log") detail = String(ev.message ?? "");
+  else if (type === "phase_started") detail = `phase: ${String(ev.phase ?? "")}`;
+  else if (type.startsWith("agent_")) {
+    detail = String(ev.label ?? "agent");
+    if (type === "agent_failed") detail += ` — ${String(ev.error ?? "")}`;
+  } else detail = String(ev.error ?? ev.runId ?? "");
+  return `[${stamp}] ${type.padEnd(15)}${phase} ${detail}`.trimEnd();
+}
+
+function baseName(path: string | undefined): string {
+  return path ? basename(path) : "";
+}
+
+export function isCliEntrypoint(argvEntry: string | undefined, moduleUrl = import.meta.url): boolean {
+  if (!argvEntry) return false;
   try {
     return realpathSync(argvEntry) === realpathSync(fileURLToPath(moduleUrl));
   } catch {

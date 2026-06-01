@@ -1,5 +1,5 @@
 /**
- * Cross-process run control backed by the run directory — STUB (M4).
+ * Cross-process run control backed by the run directory.
  *
  * Same contract as the in-process controls in `control.ts`, but the pause/stop
  * signal arrives through a file the CLI writes. The worker polls that file at
@@ -7,8 +7,8 @@
  * has no knowledge of the directory layout.
  */
 
-import { notImplemented } from "../errors.js";
-import type { Control } from "../control.js";
+import { PAUSED, RUNNING, STOPPED, type Control } from "../control.js";
+import { RunStopped } from "../errors.js";
 
 export interface FileControlOptions {
   readAction: () => string | null;
@@ -16,16 +16,43 @@ export interface FileControlOptions {
   pollIntervalMs?: number;
 }
 
+const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 export class FileControl implements Control {
+  private readonly poll: number;
+  private reported = RUNNING;
+
   constructor(private readonly options: FileControlOptions) {
-    void this.options;
+    this.poll = options.pollIntervalMs ?? 200;
   }
 
-  checkpoint(): Promise<void> {
-    throw notImplemented("file control (M4)");
+  async checkpoint(): Promise<void> {
+    for (;;) {
+      const action = this.options.readAction();
+      if (action === "stop") {
+        this.report(STOPPED);
+        throw new RunStopped("run was stopped");
+      }
+      if (action === "pause") {
+        this.report(PAUSED);
+        await delay(this.poll);
+        continue;
+      }
+      this.report(RUNNING);
+      return;
+    }
   }
 
   state(): string {
-    throw notImplemented("file control (M4)");
+    const action = this.options.readAction();
+    if (action === "stop") return STOPPED;
+    if (action === "pause") return PAUSED;
+    return RUNNING;
+  }
+
+  private report(state: string): void {
+    if (state === this.reported) return;
+    this.reported = state;
+    this.options.onState?.(state);
   }
 }

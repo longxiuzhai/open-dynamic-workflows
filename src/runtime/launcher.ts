@@ -1,5 +1,5 @@
 /**
- * Start runs in the background and wait on them (L5) — STUB (M4).
+ * Start runs in the background and wait on them (L5).
  *
  * `startRun` is fire-and-forget: it creates the run directory, spawns a detached
  * Node worker process, and returns the run id immediately. The caller polls the
@@ -7,27 +7,70 @@
  * `waitFor` does for `--wait`).
  */
 
-import { notImplemented } from "../errors.js";
-import type { RunStore } from "./run-store.js";
+import { spawn } from "node:child_process";
+import { existsSync, openSync } from "node:fs";
+import { resolve } from "node:path";
+import { execPath } from "node:process";
+import { fileURLToPath } from "node:url";
+
+import { loadConfig, resolveRunsRoot } from "../adapters/config.js";
+import { RunStore, TERMINAL_STATES } from "./run-store.js";
 
 export interface StartRunOptions {
   args?: unknown;
   configPath?: string | null;
   runsRoot?: string | null;
   source?: string | null;
+  budgetTotal?: number | null;
 }
 
+/** Create a run and launch its worker process; return `{ runId, store }`. */
 export function startRun(
-  _script: string,
-  _options: StartRunOptions = {},
+  script: string,
+  options: StartRunOptions = {},
 ): { runId: string; store: RunStore } {
-  throw notImplemented("launcher (M4)");
+  const scriptPath = resolve(script);
+  if (!existsSync(scriptPath)) {
+    throw new Error(`workflow script not found: ${scriptPath}`);
+  }
+
+  const config = loadConfig(options.configPath ?? null); // validates config & resolves defaults
+  const root = options.runsRoot ?? resolveRunsRoot(config.settings.runsRoot);
+  const source = options.source ? resolve(options.source) : process.cwd();
+
+  const store = new RunStore(root);
+  const runId = store.create({
+    script: scriptPath,
+    args: options.args,
+    configPath: options.configPath ?? null,
+    source,
+    budgetTotal: options.budgetTotal ?? null,
+  });
+
+  const workerPath = fileURLToPath(new URL("./worker.js", import.meta.url));
+  const logFd = openSync(store.logPath(runId), "w");
+  const child = spawn(execPath, [workerPath, store.runDir(runId)], {
+    cwd: source,
+    detached: true, // the run outlives this process
+    stdio: ["ignore", logFd, logFd],
+  });
+  child.unref();
+
+  return { runId, store };
 }
 
+/** Block until the run reaches a terminal state (or times out); return status. */
 export async function waitFor(
-  _store: RunStore,
-  _runId: string,
-  _options: { timeoutMs?: number; pollIntervalMs?: number } = {},
+  store: RunStore,
+  runId: string,
+  options: { timeoutMs?: number; pollIntervalMs?: number } = {},
 ): Promise<Record<string, unknown>> {
-  throw notImplemented("launcher (M4)");
+  const deadline = options.timeoutMs ? Date.now() + options.timeoutMs : null;
+  const poll = options.pollIntervalMs ?? 200;
+  for (;;) {
+    const status = store.readStatus(runId);
+    if (TERMINAL_STATES.has(status.state as string)) return status;
+    if (deadline !== null && Date.now() >= deadline) return status;
+    await new Promise<void>((r) => setTimeout(r, poll));
+  }
 }
