@@ -6,21 +6,15 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
-[![Status](https://img.shields.io/badge/status-rewrite_in_progress-orange.svg)](#roadmap)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
+[![tests](https://img.shields.io/badge/tests-94%20passing-brightgreen.svg)](tests)
+[![runtime deps](https://img.shields.io/badge/runtime%20deps-0-blue.svg)](package.json)
 
-English · [简体中文](README.zh-CN.md)
+[English](README.md) · [简体中文](README.zh-CN.md)
 
 </div>
 
 ---
-
-> 🚧 **Status — active rewrite.** Open Dynamic Workflows is being rebuilt from a
-> Python prototype into a **TypeScript / Node** runtime. The engine skeleton and
-> the `odw` CLI shell have landed (milestone **M0**); the execution layers
-> (**M1–M5**) are in progress. The interfaces below describe the **target**
-> design — see the [Roadmap](#roadmap) for what is wired up today.
-
-## What is this?
 
 **Open Dynamic Workflows (ODW)** is a TypeScript / Node CLI runtime for
 portable dynamic workflows: JavaScript scripts that fan out coding agents with
@@ -31,26 +25,41 @@ Gemini, Qwen, Kimi, or a custom CLI, this is the project.
 A **dynamic workflow** is a small JavaScript script that holds an orchestration
 plan in ordinary code and dispatches coding-agent CLIs *at scale* — outside the
 host agent's own context. You write the script (or hand it one), a runtime runs
-it in the background, and only the final result comes back.
+it in the background, and only the final result comes back. Claude Code can
+already do this inside its own private runtime; ODW makes the **same scripts**
+portable to any agent, so the workflows the Claude Code ecosystem is already
+producing become artifacts you can run anywhere.
 
-Claude Code can already do this, but only inside its own private runtime.
-**Open Dynamic Workflows makes the same capability portable**: it is an open
-runtime that runs the *same* workflow scripts — Claude's exact dialect
-(`export const meta` + injected `agent` / `parallel` / `pipeline` / … globals) —
-against **any** coding-agent CLI: Codex, Claude Code, Gemini, Qwen, Kimi, or your
-own.
+## Highlights
 
-**Why it matters.** Holding the plan in code keeps intermediate work out of the
-host's context, lets you fan out dozens of subagents, and makes multi-stage
-orchestration reproducible. That pattern is broadly useful but has been locked
-inside one vendor's runtime. ODW reopens it as a CLI-agnostic engine, so **any
-agent can orchestrate any other** — and the workflow scripts the Claude Code
-ecosystem is already producing become portable artifacts.
+- **Portable** — run the *same* workflow script on Codex, Claude Code, Gemini,
+  Qwen, Kimi, or your own CLI. Switch the underlying agent by switching adapters.
+- **Claude Code's dialect, unchanged** — `export const meta` + injected
+  `agent` / `parallel` / `pipeline` / `phase` / `log` / `args` / `budget`
+  globals, with top-level `await` and `return`. A script written for Claude Code
+  runs here as-is, and vice versa.
+- **Out of context, at scale** — the plan lives in code, so intermediate work
+  never pollutes the host's context and you can fan out dozens of subagents.
+- **Reliable hand-offs** — JSON-Schema structured outputs, validated and retried,
+  so multi-stage pipelines compose instead of guessing on free text.
+- **Background & observable** — every run is a detached worker backed by a run
+  directory: `status`, `logs --follow`, `result`, `pause` / `stop`.
+- **No threads, zero runtime dependencies** — the engine is async TypeScript
+  (`parallel` is `Promise.all`); workflow scripts stay plain `.js` and ship with
+  `.d.ts` authoring types for editor autocomplete.
 
-## A workflow looks like this
+## Quick start
+
+```bash
+git clone https://github.com/xz1220/open-dynamic-workflows.git
+cd open-dynamic-workflows
+npm install && npm run build      # tsc → dist/  (the published package has zero runtime deps)
+node dist/cli.js --help
+```
+
+Write a workflow — `fan-out-reduce.js`:
 
 ```js
-// fan-out-reduce.js
 export const meta = {
   name: 'fan-out-reduce',
   description: 'Draft in parallel, then synthesize the best answer.',
@@ -66,15 +75,15 @@ return await agent(
 )
 ```
 
+Run it against your configured agent and block for the result:
+
 ```bash
 odw run fan-out-reduce.js --wait --args '{"question": "Design a rate limiter."}'
 ```
 
-It is **plain JavaScript** in the same dialect Claude Code uses — so a script
-written for Claude Code runs here unchanged. The flagship example,
-[`examples/deep-research.js`](examples/deep-research.js) (fan-out web research →
-adversarial fact-checking → a cited report), is exactly such a script and is the
-runtime's v1 acceptance target.
+It is **plain JavaScript** in the same dialect Claude Code uses. The flagship
+example, [`examples/deep-research.js`](examples/deep-research.js) (fan-out web
+research → adversarial fact-checking → a cited report), is exactly such a script.
 
 ## The primitives
 
@@ -91,12 +100,12 @@ control flow (loops, `if`, dedup) — no imports:
 | `schema` (JSON Schema) | A typed output contract for `agent`; the reply is validated and retried until it conforms. |
 | `args` | The workflow's input, injected verbatim. |
 | `budget` | `{ total, spent(), remaining() }` — scale depth to a token target. |
-| `workflow(ref, args?)` | Run another workflow inline (one level of nesting). |
+| `workflow(ref, args?)` | Run another workflow inline (one level of nesting; v1.5+). |
 
 Use **`parallel`** when the next step needs the whole batch at once (dedup,
 tally, synthesis); **`pipeline`** for multi-stage work (the default). Keep
 reductions order-independent — branching on *which agent finished first* breaks
-reproducibility.
+reproducibility. Full reference: [`skill/references/primitives.md`](skill/references/primitives.md).
 
 ## Run and observe
 
@@ -153,9 +162,9 @@ Two design points are worth calling out:
 - **The loader is the crux.** Claude's dialect is neither a normal ES module nor
   a plain script: `export const meta` sits up top, and the body uses top-level
   `await` *and* top-level `return` while referencing injected globals. The loader
-  extracts `meta`, strips the `export`, and wraps the body in an async function
-  whose parameters *are* the primitives — so the body's `return` becomes the
-  workflow's result.
+  extracts `meta` (with a string/comment/regex-aware scan), strips the `export`,
+  and wraps the body in an async function whose parameters *are* the primitives —
+  so the body's `return` becomes the workflow's result.
 - **No threads.** The engine is async to the core. `agent()` is just an async
   subprocess call, so `parallel` is `Promise.all`, `pipeline` is per-item async
   chains, and the concurrency cap is a small async semaphore — `min(16, cpus-2)`
@@ -177,37 +186,42 @@ written in **TypeScript** (compiled to ESM, **zero runtime dependencies**) and
 ships `.d.ts` authoring types so script authors get editor autocomplete on the
 injected globals.
 
-## Install & develop
+## Examples
+
+Runnable, plain-JS workflows in [`examples/`](examples/):
+
+| Workflow | Pattern |
+| --- | --- |
+| [`deep-research.js`](examples/deep-research.js) | fan-out research → adversarial fact-check → cited report |
+| [`fan-out-reduce.js`](examples/fan-out-reduce.js) | draft N in parallel → synthesize the best |
+| [`adversarial-verify.js`](examples/adversarial-verify.js) | surface findings → keep only those that survive refutation |
+| [`loop-until-dry.js`](examples/loop-until-dry.js) | loop fanning out finders until K dry rounds |
+
+## Develop
 
 ```bash
-git clone https://github.com/xz1220/open-dynamic-workflows.git
-cd open-dynamic-workflows
-npm install        # dev tooling only — the published package has zero runtime deps
 npm run build      # tsc → dist/
 npm test           # node:test suite, driven by a mock adapter (no real accounts)
-node dist/cli.js --help
+npm run typecheck  # tsc --noEmit
 ```
 
 > Once published, `npm i -g open-dynamic-workflows` (or `npx open-dynamic-workflows …`)
-> will put the `odw` command on your PATH.
+> puts the `odw` command on your PATH.
 
-## Roadmap
+## Status
 
-This is a milestone-driven rewrite. Each milestone lands green and independently.
+**v1 is shipped.** The full runtime is on `main` — the adapter layer, execution
+bridge, workspace isolation, the async scheduler, the injected primitives, the
+loader/transform, the JSON-Schema engine, the background runtime, and the `odw`
+CLI. **94 tests pass**, and the flagship [`examples/deep-research.js`](examples/deep-research.js)
+runs end-to-end (plan → gather → verify → synthesize → critique).
 
-| Milestone | Scope | Status |
-| --- | --- | --- |
-| **M0** | Skeleton: package, strict TS, layered `src/`, CLI shell, test harness | ✅ done |
-| **M1** | Adapters + execution bridge + workspace isolation | ⏳ next |
-| **M2** | Primitives + async scheduler + **the loader/transform** | ⏳ |
-| **M3** | `schema` — structured output (inject / extract / validate / retry) | ⏳ |
-| **M4** | Background runtime + full CLI (`run`/`status`/`logs`/`pause`/`stop`) | ⏳ |
-| **M5** | 🎯 run [`examples/deep-research.js`](examples/deep-research.js) end-to-end | ⏳ |
-| **M6** | Skill doc + references + more examples | ⏳ |
+### Roadmap (v1.5+)
 
-`model` / `agentType`, git-worktree `isolation`, nested `workflow()`, real token
-budget accounting, and resume/journaling are tracked as v1.5+ increments. Full
-plan: [`docs/dynamic-workflows-tech-plan.md`](docs/dynamic-workflows-tech-plan.md).
+`model` / `agentType` rich routing · git-worktree `isolation` · nested
+`workflow()` · real token-budget accounting · resume / journaling · a
+`Date.now`/`Math.random` sandbox for replay-determinism. Full plan:
+[`docs/dynamic-workflows-tech-plan.md`](docs/dynamic-workflows-tech-plan.md).
 Background on the Claude Code dialect ODW aligns with:
 [`docs/dynamic-workflows-research.md`](docs/dynamic-workflows-research.md).
 
@@ -215,9 +229,7 @@ Background on the Claude Code dialect ODW aligns with:
 
 [`skill/SKILL.md`](skill/SKILL.md) teaches a host agent to author and run
 workflows from documentation alone — install it into your agent's skills
-directory (Codex CLI → `~/.codex/skills/`, Claude Code → its skills dir). The
-[`examples/`](examples/) directory holds runnable workflows: `deep-research.js`,
-`fan-out-reduce.js`, `adversarial-verify.js`, `loop-until-dry.js`.
+directory (Codex CLI → `~/.codex/skills/`, Claude Code → its skills dir).
 
 ## License
 
