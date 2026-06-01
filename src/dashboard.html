@@ -92,6 +92,10 @@
         background: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px), #fff;
         background-size: 34px 34px;
       }
+      /* #stageContent is .stage's only child, so IT must be the flex column —
+         otherwise .lanes-wrap's flex:1/overflow never gets a constrained height
+         and a tall column overflows .stage (clipped, not scrollable). */
+      #stageContent { display: flex; flex-direction: column; flex: 1; min-height: 0; }
       .stage-head { padding: 26px 34px 18px; border-bottom: 1px solid var(--soft-line); }
       .stage-title-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
       .stage-title { font-size: 22px; font-weight: 700; }
@@ -105,7 +109,7 @@
       .ctrl.stop:hover { border-color: var(--red); color: var(--red); }
       .ctrl:disabled { opacity: .4; cursor: default; }
 
-      .lanes-wrap { flex: 1; overflow: auto; padding: 26px 34px 60px; }
+      .lanes-wrap { flex: 1; min-height: 0; overflow: auto; padding: 26px 34px 60px; }
       .lanes { display: flex; gap: 0; align-items: stretch; min-height: 100%; }
       .lane { min-width: 230px; max-width: 280px; display: flex; flex-direction: column; }
       .lane + .lane { margin-left: 26px; position: relative; }
