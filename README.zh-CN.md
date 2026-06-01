@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/odw-logo.png" alt="Open Dynamic Workflows logo" width="96" />
+
 # Open Dynamic Workflows
 
 **开放的 dynamic workflow 运行时,让任意 coding agent 都能跑 Claude Code 式的 agent 编排。**

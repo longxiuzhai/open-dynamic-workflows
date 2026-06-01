@@ -15,6 +15,7 @@
   "files": [
     "dist",
     "types",
+    "assets/odw-logo.png",
     "odw.config.example.json",
     "README.md",
     "LICENSE"

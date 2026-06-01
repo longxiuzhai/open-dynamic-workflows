@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/odw-logo.png" alt="Open Dynamic Workflows logo" width="96" />
+
 # Open Dynamic Workflows
 
 **An open dynamic workflow runtime for Claude Code-style agent orchestration on _any_ coding agent.**
