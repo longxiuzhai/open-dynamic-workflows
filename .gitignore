@@ -31,3 +31,6 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 .gstack/
+
+# 私密微信聊天分析数据（勿提交）
+.wechat-analysis/
