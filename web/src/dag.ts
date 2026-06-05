@@ -108,7 +108,6 @@ export function renderDag(run: RunDetail, selectedAi: number | null): { html: st
   );
   lanes.forEach((title, li) => {
     const x = PAD_X + li * PITCH;
-    parts.push(`<div class="watermark" style="left:${x - 4}px;">${esc(title)}</div>`);
     parts.push(
       `<div class="lanehead" style="left:${x}px;width:${LANE_W}px;"><span class="ix">${li + 1}/${lanes.length}</span> ${esc(title)} <span class="n">${cols[li]!.length}</span><span class="line" style="width:${LANE_W}px;"></span></div>`,
     );

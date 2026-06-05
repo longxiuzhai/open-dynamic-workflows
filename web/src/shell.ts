@@ -22,9 +22,8 @@ function connChip(): string {
 
 function crumb(route: Route): string {
   if (route.view === "job") {
-    const id = route.param ?? "";
-    const name = store.run?.name ?? "run";
-    return `<div class="crumb"><span class="s">Jobs</span><span class="sep">/</span><span class="cur">${esc(name)}</span><span class="idchip">${esc(id)}</span></div>`;
+    // No toolbar title here: the big stage head already shows the run name + status.
+    return "";
   }
   if (route.view === "workspace" && route.param) {
     return `<div class="crumb"><span class="s">Workspace</span><span class="sep">/</span><span class="cur">${esc(route.param)}</span></div>`;
