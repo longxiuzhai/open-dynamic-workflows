@@ -20,16 +20,10 @@ function connChip(): string {
   return `<span class="conn ${c}"><span class="d"></span>${label}</span>`;
 }
 
-function crumb(route: Route): string {
-  if (route.view === "job") {
-    // No toolbar title here: the big stage head already shows the run name + status.
-    return "";
-  }
-  if (route.view === "workspace" && route.param) {
-    return `<div class="crumb"><span class="s">Workspace</span><span class="sep">/</span><span class="cur">${esc(route.param)}</span></div>`;
-  }
-  const title = route.view[0]!.toUpperCase() + route.view.slice(1);
-  return `<div class="crumb"><span class="cur">${esc(title)}</span></div>`;
+function crumb(_route: Route): string {
+  // No toolbar title on any page — the left rail already shows the active section,
+  // and detail pages carry their own heading.
+  return "";
 }
 
 export function toolbar(route: Route): string {
