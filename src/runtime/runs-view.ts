@@ -9,9 +9,10 @@
  *
  *   1. Stale runs. A detached worker that is `kill -9`'d never writes its
  *      terminal state, so status.json says "running" forever. We reconcile a
- *      non-terminal run against its pid: if the process is gone, it's "stale",
- *      not "running". The dashboard's headline question — what is *actually*
- *      running — must not be answered by a field that lies on crash.
+ *      non-terminal run against its pid: if the process is gone, or a legacy
+ *      "running" status never recorded a pid, it's "stale", not "running".
+ *      The dashboard's headline question — what is *actually* running — must
+ *      not be answered by a field that lies on crash.
  *
  *   2. Live counts. status.dispatched is only persisted at terminal states
  *      (worker.ts), so a running run reports 0 dispatched for its whole life.
@@ -25,7 +26,7 @@
 import type { WorkflowEvent } from "../events.js";
 import { RunStore, TERMINAL_STATES } from "./run-store.js";
 
-export type AgentState = "running" | "done" | "failed";
+export type AgentState = "running" | "done" | "failed" | "stale";
 
 export interface AgentView {
   /** Display label (the `label`/adapter/`agent` passed to agent()). */
@@ -56,6 +57,7 @@ export interface RunCounts {
   running: number;
   done: number;
   failed: number;
+  stale: number;
 }
 
 export interface RunSummary {
@@ -105,12 +107,12 @@ export function isProcessAlive(pid: number | null | undefined): boolean | null {
 /**
  * Reconcile the on-disk state with process liveness.
  *
- * Terminal states are trusted as-is. A non-terminal run whose worker pid is
- * provably gone is "stale". When the pid is unknown (pending, pre-fork) or
- * still alive, the raw state stands. We intentionally do NOT use an
- * updatedAt-timeout heuristic: the worker only rewrites status on state
- * transitions, so a legitimately long-running phase looks "idle" and would be
- * wrongly flagged. pid liveness is the honest, low-false-positive signal.
+ * Terminal states are trusted as-is. A running/paused run whose worker pid is
+ * missing or provably gone is "stale". Pending runs can legitimately be
+ * pre-fork and pid-less for a moment, so they stay pending. We intentionally do
+ * NOT use an updatedAt-timeout heuristic: the worker only rewrites status on
+ * state transitions, so a legitimately long-running phase looks "idle" and
+ * would be wrongly flagged.
  */
 export function reconcileState(rawState: string, pid: number | null): {
   state: RunDisplayState;
@@ -119,8 +121,10 @@ export function reconcileState(rawState: string, pid: number | null): {
   if (TERMINAL_STATES.has(rawState)) {
     return { state: rawState as RunDisplayState, stale: false };
   }
-  if ((rawState === "running" || rawState === "paused") && isProcessAlive(pid) === false) {
-    return { state: "stale", stale: true };
+  if (rawState === "running" || rawState === "paused") {
+    if (pid == null || isProcessAlive(pid) === false) {
+      return { state: "stale", stale: true };
+    }
   }
   return { state: (rawState || "pending") as RunDisplayState, stale: false };
 }
@@ -185,12 +189,18 @@ function countAgents(agents: AgentView[]): RunCounts {
   let running = 0;
   let done = 0;
   let failed = 0;
+  let stale = 0;
   for (const a of agents) {
     if (a.state === "running") running++;
     else if (a.state === "done") done++;
-    else failed++;
+    else if (a.state === "failed") failed++;
+    else stale++;
   }
-  return { agents: agents.length, running, done, failed };
+  return { agents: agents.length, running, done, failed, stale };
+}
+
+function staleOpenAgents(agents: AgentView[]): AgentView[] {
+  return agents.map((a) => (a.state === "running" ? { ...a, state: "stale" } : a));
 }
 
 function phaseOrderFrom(events: WorkflowEvent[], declared: Array<{ title: string }>): string[] {
@@ -221,12 +231,11 @@ export function summarize(store: RunStore, runId: string, events?: WorkflowEvent
   const status = store.readStatus(runId);
   const meta = store.readMeta(runId);
   const evs = events ?? store.readEvents(runId);
-  const agents = foldAgents(evs);
-  const counts = countAgents(agents);
-
   const rawState = String(status.state ?? "pending");
   const pid = asNumber(status.pid);
   const { state, stale } = reconcileState(rawState, pid);
+  const agents = stale ? staleOpenAgents(foldAgents(evs)) : foldAgents(evs);
+  const counts = countAgents(agents);
 
   const name =
     (status.name as string) || baseName(meta.script as string | undefined) || runId;
@@ -257,11 +266,12 @@ export function detail(store: RunStore, runId: string): RunDetail {
   const events = store.readEvents(runId);
   const base = summarize(store, runId, events);
   const meta = store.readMeta(runId);
+  const agents = base.stale ? staleOpenAgents(foldAgents(events)) : foldAgents(events);
   return {
     ...base,
     script: (meta.script as string) ?? null,
     args: meta.args ?? null,
-    agents: foldAgents(events),
+    agents,
     phaseOrder: phaseOrderFrom(events, base.phases),
     hasResult: store.hasResult(runId),
     error: store.readError(runId) as { error?: string; stack?: string } | null,

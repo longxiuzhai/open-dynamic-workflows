@@ -79,6 +79,7 @@ test("reconcileState: terminal trusted; live pid stays running; dead pid → sta
   assert.deepEqual(reconcileState("done", 999999), { state: "done", stale: false });
   // the test process itself is alive
   assert.deepEqual(reconcileState("running", process.pid), { state: "running", stale: false });
+  assert.deepEqual(reconcileState("running", null), { state: "stale", stale: true });
 
   // spawn a process, let it exit, then its pid is provably gone
   const child = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
@@ -137,6 +138,30 @@ test("summarize/detail derive counts, progress, and phase order from events", ()
 
     // listSummaries returns everything, newest-first
     assert.equal(listSummaries(store).length, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("summarize/detail mark open agents stale when a running run has no live worker", () => {
+  const root = tempRoot();
+  try {
+    const store = new RunStore(root);
+    const id = seedRun(store, { name: "legacy", state: "running" }, [
+      A("agent_started", "open", "Research", 1),
+      A("agent_started", "settled", "Research", 2),
+      A("agent_finished", "settled", "Research", 3, { adapter: "mock", attempts: 1 }),
+    ]);
+
+    const s = summarize(store, id);
+    assert.equal(s.state, "stale");
+    assert.equal(s.counts.running, 0);
+    assert.equal(s.counts.stale, 1);
+    assert.equal(s.counts.done, 1);
+
+    const d = detail(store, id);
+    assert.equal(d.agents.find((a) => a.label === "open")!.state, "stale");
+    assert.equal(d.agents.find((a) => a.label === "settled")!.state, "done");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

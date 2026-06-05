@@ -1,7 +1,7 @@
 /** Activity — the machine pulse: per-adapter fleet load + a live event firehose. */
 import { store } from "../store";
 import type { RunDetail } from "../types";
-import { esc, fmtClock } from "../util";
+import { ACTIVE, esc, fmtClock } from "../util";
 
 const EVT_CLASS: Record<string, string> = {
   run_started: "rstart",
@@ -49,8 +49,9 @@ function eventDetail(e: { type: string; phase?: unknown; message?: unknown; labe
 
 export function renderActivity(): string {
   const runs = store.runs;
-  const activeCount = runs.filter((r) => ["running", "paused", "pending"].includes(r.state)).length;
-  const runningAgents = runs.reduce((n, r) => n + r.counts.running, 0);
+  const activeRuns = runs.filter((r) => ACTIVE.has(r.state));
+  const activeCount = activeRuns.length;
+  const runningAgents = activeRuns.reduce((n, r) => n + r.counts.running, 0);
   const doneAgents = runs.reduce((n, r) => n + r.counts.done, 0);
   const failedAgents = runs.reduce((n, r) => n + r.counts.failed, 0);
 

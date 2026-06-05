@@ -60,6 +60,7 @@ function stageHead(run: RunDetail, tab: JobTab): string {
     `<span class="chip"><span class="em">●</span><b>${run.counts.running}</b> running</span>` +
     `<span class="chip"><b>${run.counts.done}</b> done</span>` +
     (run.counts.failed ? `<span class="chip"><span class="rd">✕</span><b>${run.counts.failed}</b> failed</span>` : "") +
+    (run.counts.stale ? `<span class="chip"><span class="am">●</span><b>${run.counts.stale}</b> stale</span>` : "") +
     `<span class="chip"><b>${order.length}</b> phases</span>` +
     (run.pid != null ? `<span class="chip">pid <b>${run.pid}</b></span>` : "") +
     beat +
@@ -80,6 +81,8 @@ function detailPanel(a: AgentView): string {
       ? `<div class="dp-sec">Status</div><div class="dp-out">running…<br>started ${fmtClock(a.startedAt)}</div>`
       : a.state === "done"
         ? `<div class="dp-sec">Outcome</div><div class="dp-out">done in ${fmtDurMs(a.durationMs)}${a.attempts ? `<br>attempts: ${a.attempts}` : ""}</div>`
+        : a.state === "stale"
+          ? `<div class="dp-sec">Status</div><div class="dp-out">worker lost contact<br>started ${fmtClock(a.startedAt)}</div>`
         : errBlock;
   return (
     `<div class="detailpanel">` +

@@ -7,6 +7,7 @@
  * Rust stay a thin presenter.
  */
 import type { RunSummary } from "./types";
+import { ACTIVE } from "./util";
 
 interface BadgeTarget {
   setBadgeCount?: (n?: number) => Promise<void>;
@@ -33,7 +34,6 @@ export function isNative(): boolean {
   return tauri() !== null;
 }
 
-const ACTIVE = new Set(["running", "paused", "pending"]);
 let lastStates = new Map<string, string>();
 
 /**

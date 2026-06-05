@@ -9,6 +9,7 @@
  */
 import { api } from "./api";
 import type { Connection, RunDetail, RunSummary, WorkflowEvent, WorkflowSummary } from "./types";
+import { ACTIVE } from "./util";
 
 export type ActivityEvent = WorkflowEvent & { _run: string; _adapter: string | null };
 
@@ -123,7 +124,7 @@ class Store {
    */
   async loadActivity(): Promise<void> {
     const recent = this.runs.slice(0, 8);
-    const active = this.runs.filter((r) => ACTIVE_STATES.has(r.state));
+    const active = this.runs.filter((r) => ACTIVE.has(r.state));
     const [tails, details] = await Promise.all([
       Promise.all(
         recent.map(async (r) => {
@@ -156,7 +157,5 @@ class Store {
     this.emit();
   }
 }
-
-const ACTIVE_STATES = new Set(["running", "paused", "pending"]);
 
 export const store = new Store();

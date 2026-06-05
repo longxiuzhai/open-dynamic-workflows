@@ -81,3 +81,6 @@ export function fmtDayGroup(tsSec: number | null): string {
 
 /** Terminal run states (mirror of run-store.TERMINAL_STATES). */
 export const TERMINAL = new Set(["done", "failed", "stopped"]);
+
+/** States that should count as live/active in the shell. */
+export const ACTIVE = new Set(["running", "paused", "pending"]);

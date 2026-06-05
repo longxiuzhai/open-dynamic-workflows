@@ -14,7 +14,7 @@ import { esc, fmtDurSec } from "./util";
 const PAD_X = 24;
 const PAD_TOP = 52;
 const LANE_W = 158;
-const PITCH = 212;
+const PITCH = 248;
 const SLOT = 88;
 const MAX_PER_LANE = 9;
 
@@ -32,6 +32,9 @@ function subLine(a: AgentView): string {
   if (a.state === "running") {
     const t = a.startedAt != null ? `⏱ ${fmtDurSec(Date.now() / 1000 - a.startedAt)}` : "";
     return [a.adapter, t].filter(Boolean).join(" · ") || "running";
+  }
+  if (a.state === "stale") {
+    return [a.adapter, "stale"].filter(Boolean).join(" · ");
   }
   const dur = a.durationMs != null ? fmtDurSec(a.durationMs / 1000) : "";
   return [a.adapter, dur].filter(Boolean).join(" · ") || (a.adapter ?? "");
@@ -92,7 +95,14 @@ export function renderDag(run: RunDetail, selectedAi: number | null): { html: st
       const y2 = p.cy;
       const mx = (x1 + x2) / 2;
       const d = `M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`;
-      const color = p.state === "failed" ? "#ef4444" : p.state === "done" ? "#7E8D84" : "#16C079";
+      const color =
+        p.state === "failed"
+          ? "#ef4444"
+          : p.state === "done"
+            ? "#7E8D84"
+            : p.state === "stale"
+              ? "#f97316"
+              : "#16C079";
       edges.push(`<path d="${d}" stroke="${color}" stroke-width="${p.state === "done" ? 1.6 : 2}" fill="none"/>`);
       if (p.state === "running") {
         dots.push(

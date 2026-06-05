@@ -1,14 +1,12 @@
 /** The persistent app shell: unified toolbar, left rail, bottom status bar. */
 import { icons, logoSvg } from "./icons";
 import { store } from "./store";
-import { clsx, esc } from "./util";
+import { ACTIVE, clsx, esc } from "./util";
 
 export interface Route {
   view: "activity" | "workspace" | "jobs" | "job" | "settings";
   param: string | null;
 }
-
-const ACTIVE = new Set(["running", "paused", "pending"]);
 
 export function activeRuns() {
   return store.runs.filter((r) => ACTIVE.has(r.state));
@@ -73,12 +71,12 @@ export function rail(route: Route): string {
 }
 
 export function statusbar(): string {
-  const active = activeRuns().length;
-  const running = store.runs.reduce((n, r) => n + r.counts.running, 0);
+  const active = activeRuns();
+  const running = active.reduce((n, r) => n + r.counts.running, 0);
   const live = store.conn === "live";
   return (
     `<div class="statusbar">` +
-    `<span>${active} active · ${running} running</span>` +
+    `<span>${active.length} active · ${running} running</span>` +
     `<span>runs/&lt;workflow&gt;/&lt;runId&gt;</span>` +
     `<span style="display:inline-flex;align-items:center;gap:7px;"><span class="live-dot${live ? "" : " off"}"></span> ${live ? "live · SSE" : store.conn}</span>` +
     `</div>`

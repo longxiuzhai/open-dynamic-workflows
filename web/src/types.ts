@@ -9,13 +9,14 @@ export type RunDisplayState =
   | "stopped"
   | "stale";
 
-export type AgentState = "running" | "done" | "failed";
+export type AgentState = "running" | "done" | "failed" | "stale";
 
 export interface RunCounts {
   agents: number;
   running: number;
   done: number;
   failed: number;
+  stale: number;
 }
 
 export interface RunSummary {
