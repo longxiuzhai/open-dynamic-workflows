@@ -67,17 +67,6 @@ export function createPrimitives(ctx: RunContext): WorkflowGlobals {
     // forwarded to the bridge and injected into the prompt), never an adapter name.
     const display =
       opts.label ?? opts.adapter ?? opts.agentType ?? ctx.config.settings.defaultAdapter ?? "agent";
-    // Record the adapter the call will run on at start (the bridge resolves it
-    // the same way) so observers can show per-adapter load while agents are live,
-    // not just after they settle. agent_finished still carries the resolved one.
-    ctx.emit(
-      event(AGENT_STARTED, {
-        label: display,
-        phase: activePhase,
-        adapter: opts.adapter ?? ctx.config.settings.defaultAdapter ?? null,
-      }),
-    );
-
     const request: AgentRequest = {
       prompt,
       adapter: opts.adapter,
@@ -89,7 +78,18 @@ export function createPrimitives(ctx: RunContext): WorkflowGlobals {
     };
     let outcome;
     try {
-      outcome = await ctx.scheduler.runAgent(() => ctx.bridge.run(request));
+      outcome = await ctx.scheduler.runAgent(async () => {
+        // Record the adapter only once the scheduler has handed out a real
+        // dispatch slot, so queued work is not presented as running.
+        ctx.emit(
+          event(AGENT_STARTED, {
+            label: display,
+            phase: activePhase,
+            adapter: opts.adapter ?? ctx.config.settings.defaultAdapter ?? null,
+          }),
+        );
+        return ctx.bridge.run(request);
+      });
     } catch (err) {
       if (isFatalError(err)) throw err; // budget exhausted / stop: abort the run
       ctx.emit(event(AGENT_FAILED, { label: display, phase: activePhase, error: String(err) }));

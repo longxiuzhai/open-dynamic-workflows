@@ -4,15 +4,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { startRun } from "../src/runtime/launcher.js";
+import { startRun, waitFor } from "../src/runtime/launcher.js";
 
 // These assert the launcher WIRING: that startRun resolves a bare name against
-// <source>/.odw/workflows (not process.cwd()), via the shared resolveWorkflow.
-// The success case spawns a detached, unref'd worker that just fails fast under
-// the test runner (no compiled worker.js); we only read meta.json, which
-// store.create() writes synchronously before the spawn.
+// <source>/.odw/workflows (not process.cwd()), via the shared resolveWorkflow,
+// and can execute the worker from the TypeScript dev/test entrypoint.
 
-test("startRun resolves a bare name against <source>/.odw/workflows", () => {
+test("startRun resolves a bare name against <source>/.odw/workflows", async () => {
   const tmp = mkdtempSync(join(tmpdir(), "odw-launch-"));
   try {
     const proj = join(tmp, "proj");
@@ -25,6 +23,9 @@ test("startRun resolves a bare name against <source>/.odw/workflows", () => {
     const meta = store.readMeta(runId);
     assert.equal(meta.script, wf, "name must resolve to the project workflows file");
     assert.equal(meta.source, proj);
+    const status = await waitFor(store, runId, { timeoutMs: 5000 });
+    assert.equal(status.state, "done");
+    assert.equal(store.readResult(runId), 1);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

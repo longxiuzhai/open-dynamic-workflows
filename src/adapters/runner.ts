@@ -21,15 +21,21 @@ export interface RunCommandOptions {
   env?: Record<string, string>;
   /** Seconds before the process is killed; omit for no timeout. */
   timeout?: number;
+  /** Combined stdout+stderr bytes to retain before killing; omit for a safe default. */
+  maxOutputBytes?: number;
 }
 
 /** The injectable contract for executing a command. */
 export type CommandRunner = (command: string[], options?: RunCommandOptions) => Promise<CliResult>;
 
+export const DEFAULT_MAX_OUTPUT_BYTES = 32 * 1024 * 1024;
+
 export const runCommand: CommandRunner = (command, options = {}) => {
   const started = Date.now();
   const elapsed = (): number => (Date.now() - started) / 1000;
   const [cmd, ...args] = command;
+  const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
+  const hasOutputLimit = Number.isFinite(maxOutputBytes);
 
   return new Promise<CliResult>((resolve) => {
     if (!cmd) {
@@ -45,6 +51,8 @@ export const runCommand: CommandRunner = (command, options = {}) => {
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    let outputBytes = 0;
+    let outputExceeded = false;
     let settled = false;
     let timer: NodeJS.Timeout | undefined;
 
@@ -62,13 +70,34 @@ export const runCommand: CommandRunner = (command, options = {}) => {
       }, options.timeout * 1000);
     }
 
+    const appendLimited = (stream: "stdout" | "stderr", d: string): void => {
+      if (outputExceeded) return;
+      if (!hasOutputLimit) {
+        if (stream === "stdout") stdout += d;
+        else stderr += d;
+        return;
+      }
+      const bytes = Buffer.byteLength(d);
+      const remaining = Math.max(0, maxOutputBytes - outputBytes);
+      if (remaining > 0) {
+        const chunk = bytes <= remaining ? d : Buffer.from(d).subarray(0, remaining).toString("utf8");
+        if (stream === "stdout") stdout += chunk;
+        else stderr += chunk;
+      }
+      outputBytes += bytes;
+      if (bytes > remaining) {
+        outputExceeded = true;
+        child.kill("SIGKILL");
+      }
+    };
+
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (d: string) => {
-      stdout += d;
+      appendLimited("stdout", d);
     });
     child.stderr.on("data", (d: string) => {
-      stderr += d;
+      appendLimited("stderr", d);
     });
 
     child.on("error", (err) => {
@@ -86,11 +115,15 @@ export const runCommand: CommandRunner = (command, options = {}) => {
       // timeout kill (already flagged) from an external/crash signal (SIGSEGV,
       // OOM SIGKILL, …) so a crash is never mistaken for a clean exit (0).
       let returncode: number;
-      if (timedOut) returncode = -1;
+      if (outputExceeded) returncode = 1;
+      else if (timedOut) returncode = -1;
       else if (code !== null) returncode = code;
       else returncode = signal ? 128 : 1;
       const note = signal && !timedOut ? `\n[process terminated by signal ${signal}]` : "";
-      finish({ returncode, stdout, stderr: stderr + note, timedOut, duration: elapsed() });
+      const outputNote = outputExceeded
+        ? `\n[process output exceeded ${maxOutputBytes} bytes; terminated]`
+        : "";
+      finish({ returncode, stdout, stderr: stderr + note + outputNote, timedOut, duration: elapsed() });
     });
 
     // The child may close stdin before consuming all input; an unhandled EPIPE

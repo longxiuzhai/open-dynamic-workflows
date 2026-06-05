@@ -5,11 +5,14 @@ import { defaultConfig } from "../src/adapters/config.js";
 import type { Bridge } from "../src/bridge.js";
 import type { RunContext } from "../src/context.js";
 import { NullControl } from "../src/control.js";
-import { AGENT_FINISHED, LOG, MemorySink } from "../src/events.js";
+import { AGENT_FINISHED, AGENT_STARTED, LOG, MemorySink } from "../src/events.js";
 import { createPrimitives } from "../src/primitives.js";
 import { Scheduler } from "../src/scheduler.js";
 
-function fakeContext(run: (req: { prompt: string }) => Promise<unknown>): {
+function fakeContext(
+  run: (req: { prompt: string }) => Promise<unknown>,
+  options: { concurrency?: number } = {},
+): {
   ctx: RunContext;
   sink: MemorySink;
 } {
@@ -19,7 +22,7 @@ function fakeContext(run: (req: { prompt: string }) => Promise<unknown>): {
   const ctx: RunContext = {
     config,
     bridge: { run } as unknown as Bridge,
-    scheduler: new Scheduler({ concurrency: 4, maxAgents: 1000 }),
+    scheduler: new Scheduler({ concurrency: options.concurrency ?? 4, maxAgents: 1000 }),
     control: new NullControl(),
     sink,
     args: null,
@@ -41,12 +44,56 @@ const outcome = (value: unknown) => ({
   cli: null,
 });
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
+async function waitUntil(fn: () => boolean): Promise<void> {
+  const deadline = Date.now() + 1000;
+  while (!fn()) {
+    if (Date.now() > deadline) throw new Error("condition did not become true");
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+}
+
 test("agent returns the bridge outcome value and emits a finished event", async () => {
   const { ctx, sink } = fakeContext(async (req) => outcome(`R:${req.prompt}`));
   const p = createPrimitives(ctx);
   const r = await p.agent("hi");
   assert.equal(r, "R:hi");
   assert.equal(sink.ofType(AGENT_FINISHED).length, 1);
+});
+
+test("agent_started is emitted only after a scheduler slot is acquired", async () => {
+  const first = deferred<ReturnType<typeof outcome>>();
+  const second = deferred<ReturnType<typeof outcome>>();
+  let calls = 0;
+  const { ctx, sink } = fakeContext(
+    async (req) => {
+      calls++;
+      return req.prompt === "first" ? first.promise : second.promise;
+    },
+    { concurrency: 1 },
+  );
+  const p = createPrimitives(ctx);
+  const run = Promise.all([
+    p.agent("first", { label: "first" }),
+    p.agent("second", { label: "second" }),
+  ]);
+
+  await waitUntil(() => calls === 1);
+  assert.equal(sink.ofType(AGENT_STARTED).length, 1);
+
+  first.resolve(outcome("one"));
+  await waitUntil(() => calls === 2);
+  assert.equal(sink.ofType(AGENT_STARTED).length, 2);
+
+  second.resolve(outcome("two"));
+  assert.deepEqual(await run, ["one", "two"]);
 });
 
 test("parallel is a barrier; a thrown thunk becomes null", async () => {

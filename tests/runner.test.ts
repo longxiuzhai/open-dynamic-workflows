@@ -33,3 +33,18 @@ test("a timeout kills the process and flags timedOut", async () => {
   const r = await runCommand([execPath, "-e", "setTimeout(() => {}, 10000)"], { timeout: 0.2 });
   assert.equal(r.timedOut, true);
 });
+
+test("runaway output is capped before it can exhaust the worker heap", async () => {
+  const r = await runCommand(
+    [
+      execPath,
+      "-e",
+      "for (let i = 0; i < 1024; i++) process.stdout.write('x'.repeat(1024)); setTimeout(() => {}, 10000)",
+    ],
+    { maxOutputBytes: 4096 },
+  );
+  assert.notEqual(r.returncode, 0);
+  assert.equal(r.timedOut, false);
+  assert.ok(Buffer.byteLength(r.stdout) <= 4096);
+  assert.match(r.stderr, /process output exceeded 4096 bytes/);
+});

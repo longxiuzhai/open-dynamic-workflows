@@ -8,7 +8,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { closeSync, openSync, readFileSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { execPath } from "node:process";
 import { fileURLToPath } from "node:url";
@@ -69,7 +69,7 @@ export function startRun(
   // the same `executeRun` from inside the bundle.
   const workerArgv = isSeaBinary()
     ? ["__worker", store.runDir(runId)]
-    : [fileURLToPath(new URL("./worker.js", import.meta.url)), store.runDir(runId)];
+    : nodeWorkerArgv(store.runDir(runId));
   const logFd = openSync(store.logPath(runId), "w");
   const child = spawn(execPath, workerArgv, {
     cwd: source,
@@ -80,6 +80,34 @@ export function startRun(
   child.unref();
 
   return { runId, store };
+}
+
+function nodeWorkerArgv(runDir: string): string[] {
+  const jsWorker = fileURLToPath(new URL("./worker.js", import.meta.url));
+  if (existsSync(jsWorker)) return [jsWorker, runDir];
+
+  const tsWorker = fileURLToPath(new URL("./worker.ts", import.meta.url));
+  if (existsSync(tsWorker)) return [...tsxLoaderArgv(), tsWorker, runDir];
+
+  return [jsWorker, runDir];
+}
+
+function tsxLoaderArgv(): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < process.execArgv.length; i++) {
+    const arg = process.execArgv[i]!;
+    const next = process.execArgv[i + 1];
+    if ((arg === "--import" || arg === "--require" || arg === "-r") && next?.includes("tsx")) {
+      out.push(arg, next);
+      i++;
+    } else if (
+      (arg.startsWith("--import=") || arg.startsWith("--require=") || arg.startsWith("-r")) &&
+      arg.includes("tsx")
+    ) {
+      out.push(arg);
+    }
+  }
+  return out;
 }
 
 /** Block until the run reaches a terminal state (or times out); return status. */
