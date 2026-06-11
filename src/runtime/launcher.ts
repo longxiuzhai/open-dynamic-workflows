@@ -13,7 +13,8 @@ import { resolve } from "node:path";
 import { execPath } from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { loadConfig, resolveRunsRoot } from "../adapters/config.js";
+import { loadConfig, resolveAdapter, resolveRunsRoot } from "../adapters/config.js";
+import type { Config } from "../adapters/types.js";
 import { loadWorkflowScript } from "../loader.js";
 import { isSeaBinary } from "../sea.js";
 import { resolveWorkflow } from "../workflows/resolve.js";
@@ -25,6 +26,42 @@ export interface StartRunOptions {
   runsRoot?: string | null;
   source?: string | null;
   budgetTotal?: number | null;
+  /**
+   * Run-level adapter override: becomes this run's default `agent()` adapter
+   * (an explicit `agent(p, { adapter })` still wins). Validated against the
+   * config up front so an unknown name fails here, not minutes later inside the
+   * detached worker.
+   */
+  adapter?: string | null;
+  /** Where the run was initiated from (e.g. "launch" for the GUI flow). */
+  origin?: string | null;
+}
+
+/**
+ * The prelude both entry points share: load + validate config, resolve the run
+ * source, fail-fast on an unknown adapter, and open the run store. Keeping it in
+ * one place means a new StartRunOption or validation rule lands for path-based
+ * AND inline launches at once.
+ */
+function prepare(options: StartRunOptions): { config: Config; source: string; store: RunStore } {
+  const config = loadConfig(options.configPath ?? null); // validates config & resolves defaults
+  const source = options.source ? resolve(options.source) : process.cwd();
+  if (options.adapter) resolveAdapter(config, options.adapter); // fail fast on unknown names
+  const store = new RunStore(options.runsRoot ?? resolveRunsRoot(config.settings.runsRoot));
+  return { config, source, store };
+}
+
+/** The CreateRunInput fields every launch shares, given its resolved source. */
+function commonCreateInput(options: StartRunOptions, source: string, workflowName: string | null) {
+  return {
+    args: options.args,
+    configPath: options.configPath ?? null,
+    source,
+    budgetTotal: options.budgetTotal ?? null,
+    workflowName,
+    adapter: options.adapter ?? null,
+    origin: options.origin ?? null,
+  };
 }
 
 /** Create a run and launch its worker process; return `{ runId, store }`. */
@@ -32,8 +69,7 @@ export function startRun(
   script: string,
   options: StartRunOptions = {},
 ): { runId: string; store: RunStore } {
-  const config = loadConfig(options.configPath ?? null); // validates config & resolves defaults
-  const source = options.source ? resolve(options.source) : process.cwd();
+  const { config, source, store } = prepare(options);
   // `script` may be a path (./wf.js) or a managed-directory name (deep-research);
   // resolve against `source` so --source steers both literal paths and name lookup.
   const { scriptPath } = resolveWorkflow(script, { cwd: source, config });
@@ -50,18 +86,45 @@ export function startRun(
     workflowName = null;
   }
 
-  const root = options.runsRoot ?? resolveRunsRoot(config.settings.runsRoot);
+  const runId = store.create({ script: scriptPath, ...commonCreateInput(options, source, workflowName) });
+  spawnWorker(store, runId, source);
+  return { runId, store };
+}
 
-  const store = new RunStore(root);
+/**
+ * Start a run from INLINE workflow source (no file on disk yet). The source is
+ * written as `workflow.js` inside the run directory — a generated or one-off
+ * script is archived with its run, rerunnable and inspectable later — and the
+ * worker is spawned on it exactly like a path-based run.
+ *
+ * The source is compile-checked here so a caller (the HTTP API, a tool) can
+ * reject a known-bad script before a worker ever spawns; pass
+ * `allowInvalid: true` to skip that (the run is then created and recorded as
+ * failed by the worker, the same as a malformed file-based script).
+ */
+export function startRunFromSource(
+  sourceCode: string,
+  options: StartRunOptions & { allowInvalid?: boolean } = {},
+): { runId: string; store: RunStore } {
+  const { source, store } = prepare(options);
+
+  let workflowName: string | null = null;
+  try {
+    workflowName = loadWorkflowScript(sourceCode, "workflow.js").meta.name;
+  } catch (err) {
+    if (!options.allowInvalid) throw err; // surface the compile error to the caller
+  }
+
   const runId = store.create({
-    script: scriptPath,
-    args: options.args,
-    configPath: options.configPath ?? null,
-    source,
-    budgetTotal: options.budgetTotal ?? null,
-    workflowName,
+    script: "",
+    inlineSource: sourceCode,
+    ...commonCreateInput(options, source, workflowName),
   });
+  spawnWorker(store, runId, source);
+  return { runId, store };
+}
 
+function spawnWorker(store: RunStore, runId: string, source: string): void {
   // How the worker is launched depends on how *we* were launched. As a normal
   // Node process, `execPath` is `node` and we hand it `worker.js`. As a compiled
   // SEA binary there is no `node` and no `worker.js` on disk, so we re-exec the
@@ -78,8 +141,6 @@ export function startRun(
   });
   closeSync(logFd); // the child holds its own dup'd descriptors; don't leak ours
   child.unref();
-
-  return { runId, store };
 }
 
 function nodeWorkerArgv(runDir: string): string[] {

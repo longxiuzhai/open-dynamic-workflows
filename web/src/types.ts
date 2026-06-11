@@ -57,6 +57,21 @@ export interface RunDetail extends RunSummary {
   phaseOrder: string[];
   hasResult: boolean;
   error: { error?: string; stack?: string } | null;
+  /** Where the run was initiated from ("launch" for GUI-launched runs). */
+  origin: string | null;
+  /** Run-level adapter override recorded at launch, if any. */
+  adapter: string | null;
+  /** The workflow identity recorded at create time (meta.workflowName). */
+  workflowName: string | null;
+}
+
+/** One row of GET /api/adapters — the Launch view's agent picker. */
+export interface AdapterListing {
+  name: string;
+  label: string;
+  installed: boolean;
+  isDefault: boolean;
+  permissionNote: string;
 }
 
 export interface WorkflowSummary {
@@ -84,3 +99,8 @@ export interface WorkflowEvent {
 }
 
 export type Connection = "connecting" | "live" | "reconnecting";
+
+/** GET /api/capabilities — whether this dashboard may start/control runs. */
+export interface Capabilities {
+  writable: boolean;
+}

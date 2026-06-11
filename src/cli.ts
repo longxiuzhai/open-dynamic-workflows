@@ -24,7 +24,7 @@ import { parseArgs } from "node:util";
 import { loadConfig, resolveRunsRoot } from "./adapters/config.js";
 import type { WorkflowEvent } from "./events.js";
 import { VERSION } from "./index.js";
-import { startRun, waitFor } from "./runtime/launcher.js";
+import { startRun, startRunFromSource, waitFor } from "./runtime/launcher.js";
 import { RunStore, TERMINAL_STATES } from "./runtime/run-store.js";
 import { startServer } from "./runtime/server.js";
 import { executeRun } from "./runtime/worker.js";
@@ -75,6 +75,7 @@ export function helpText(): string {
     "  --config <path>     path to an odw.config.json",
     "  --runs-root <dir>   directory runs are stored under",
     "  --source <dir>      run's working dir; also anchors a relative script path & project-name lookup",
+    "  --adapter <name>    default agent() adapter for this run (explicit agent(p,{adapter}) still wins)",
     "  --wait              block until the run finishes and print the result",
     "  --timeout <s>       with --wait: stop waiting after s seconds (the run itself continues)",
     "  --budget <tokens>   token target exposed to the script as budget.total",
@@ -159,6 +160,7 @@ async function cmdRun(rest: string[]): Promise<number> {
       config: { type: "string" },
       "runs-root": { type: "string" },
       source: { type: "string" },
+      adapter: { type: "string" },
       wait: { type: "boolean" },
       timeout: { type: "string" },
       budget: { type: "string" },
@@ -194,6 +196,7 @@ async function cmdRun(rest: string[]): Promise<number> {
     configPath: values.config ?? null,
     runsRoot: values["runs-root"] ?? null,
     source: values.source ?? null,
+    adapter: values.adapter ?? null,
     budgetTotal,
   });
 
@@ -323,13 +326,31 @@ function cmdRerun(rest: string[]): number {
     process.stderr.write(`run ${runId} has no script to rerun\n`);
     return 1;
   }
-  const { runId: newId } = startRun(script, {
+  const opts = {
     args: meta.args,
     configPath: (meta.configPath as string | null) ?? null,
     runsRoot: values["runs-root"] ?? null,
     source: (meta.source as string | undefined) ?? null,
+    adapter: (meta.adapter as string | null) ?? null,
     budgetTotal: (meta.budgetTotal as number | null) ?? null,
-  });
+  };
+  // An inline-launched run's script lives inside the OLD run dir. Re-archive its
+  // source into the NEW run (via startRunFromSource) rather than pointing the new
+  // run back at the old directory — so it stays self-contained and is correctly
+  // flagged inline (no spurious run-by-name divergence note).
+  let newId: string;
+  if (meta.inline === true) {
+    let sourceCode: string;
+    try {
+      sourceCode = readFileSync(script, "utf8");
+    } catch {
+      process.stderr.write(`run ${runId}: its archived script is gone, cannot rerun\n`);
+      return 1;
+    }
+    newId = startRunFromSource(sourceCode, { ...opts, allowInvalid: true, origin: (meta.origin as string | null) ?? null }).runId;
+  } else {
+    newId = startRun(script, opts).runId;
+  }
   process.stdout.write(newId + "\n");
   process.stderr.write(`re-running ${runId} as ${newId} (use 'odw status ${newId}')\n`);
   return 0;
@@ -357,7 +378,14 @@ async function cmdServe(rest: string[]): Promise<number> {
   const store = storeFrom(values);
   const config = loadConfig(values.config ?? null);
 
-  const handle = await startServer({ store, port, host, cwd: process.cwd(), config });
+  const handle = await startServer({
+    store,
+    port,
+    host,
+    cwd: process.cwd(),
+    config,
+    configPath: values.config ?? null,
+  });
   process.stdout.write(`odw dashboard → ${handle.url}\n`);
   process.stdout.write(`  watching ${store.root}\n`);
   if (host !== "127.0.0.1" && host !== "localhost" && host !== "::1") {

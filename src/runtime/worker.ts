@@ -15,7 +15,7 @@ import { basename, dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { loadConfig } from "../adapters/config.js";
-import { buildContext, type RunContext } from "../context.js";
+import { buildContext, spentTokens, type RunContext } from "../context.js";
 import { RunStopped } from "../errors.js";
 import { LOG, RUN_FAILED, RUN_FINISHED, RUN_STARTED, RUN_STOPPED, event } from "../events.js";
 import { loadWorkflowScript } from "../loader.js";
@@ -38,12 +38,21 @@ export async function executeRun(runDir: string): Promise<string> {
   // still recorded as a failed run rather than leaving it stuck in "pending".
   let ctx: RunContext | undefined;
   const dispatched = () => ctx?.scheduler.dispatched ?? 0;
+  const spent = () => (ctx ? spentTokens(ctx.usage) : 0);
 
   try {
-    const config = loadConfig((meta.configPath as string | null) ?? null);
+    const baseConfig = loadConfig((meta.configPath as string | null) ?? null);
+    // Run-level adapter override (meta.adapter): becomes this run's default for
+    // every `agent()` call that does not name one explicitly. Priority chain:
+    // agent(p, { adapter }) > meta.adapter > config defaultAdapter > auto-pick.
+    const adapterOverride =
+      typeof meta.adapter === "string" && meta.adapter.length > 0 ? meta.adapter : null;
+    const config = adapterOverride
+      ? { ...baseConfig, settings: { ...baseConfig.settings, defaultAdapter: adapterOverride } }
+      : baseConfig;
     const control = new FileControl({
       readAction: () => store.readControl(runId),
-      onState: (state) => store.updateStatus(runId, { state, dispatched: dispatched() }),
+      onState: (state) => store.updateStatus(runId, { state, dispatched: dispatched(), spentTokens: spent() }),
     });
     ctx = buildContext(config, {
       source: meta.source as string | undefined,
@@ -61,8 +70,13 @@ export async function executeRun(runDir: string): Promise<string> {
     // The run-by-name lookup keys on the filename stem, not meta.name. Flag a
     // divergence (through the event stream, so it shows in `odw logs` and the
     // dashboard) so the author knows which token actually invokes this file.
+    // Inline-source runs are exempt: their workflow.js lives inside the run
+    // directory and is not name-addressable, so the note would only mislead.
     const stem = basename(script).replace(/\.[^.]*$/, "");
-    if (loaded.meta.name !== stem) {
+    // Inline-launched runs (meta.inline) carry their script inside the run dir
+    // and are not name-addressable, so the divergence note would only mislead.
+    const isInline = meta.inline === true;
+    if (!isInline && loaded.meta.name !== stem) {
       sink.emit(
         event(LOG, {
           message:
@@ -81,18 +95,18 @@ export async function executeRun(runDir: string): Promise<string> {
 
     store.writeResult(runId, result);
     sink.emit(event(RUN_FINISHED, { runId }));
-    store.updateStatus(runId, { state: "done", dispatched: dispatched() });
+    store.updateStatus(runId, { state: "done", dispatched: dispatched(), spentTokens: spent() });
     return "done";
   } catch (err) {
     if (err instanceof RunStopped) {
       sink.emit(event(RUN_STOPPED, { runId }));
-      store.updateStatus(runId, { state: "stopped", dispatched: dispatched() });
+      store.updateStatus(runId, { state: "stopped", dispatched: dispatched(), spentTokens: spent() });
       return "stopped";
     }
     const e = err as Error;
     sink.emit(event(RUN_FAILED, { runId, error: e.message ?? String(err) }));
     store.writeError(runId, { error: e.message ?? String(err), stack: e.stack ?? null });
-    store.updateStatus(runId, { state: "failed", dispatched: dispatched() });
+    store.updateStatus(runId, { state: "failed", dispatched: dispatched(), spentTokens: spent() });
     return "failed";
   }
 }

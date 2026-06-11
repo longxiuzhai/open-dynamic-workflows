@@ -169,8 +169,70 @@ export function resolveAdapter(config: Config, name?: string | null): Adapter {
   return adapter;
 }
 
+/** One row of `GET /api/adapters` / the Launch view's agent picker. */
+export interface AdapterListing {
+  name: string;
+  /** Display label (adapter.label, else the name). */
+  label: string;
+  /** Whether the CLI's executable resolves on PATH right now. */
+  installed: boolean;
+  /** Whether this is the configured defaultAdapter. */
+  isDefault: boolean;
+  /**
+   * The adapter's permission posture in one human-readable line, derived from
+   * its command flags — shown before a user lets it loose on a directory.
+   */
+  permissionNote: string;
+}
+
+/** Every configured adapter with install/default/permission info, sorted by name. */
+export function listAdapters(config: Config): AdapterListing[] {
+  return Object.keys(config.adapters)
+    .sort()
+    .map((name) => {
+      const a = config.adapters[name]!;
+      return {
+        name,
+        label: a.label ?? name,
+        installed: isOnPath(a.command[0]!),
+        isDefault: config.settings.defaultAdapter === name,
+        permissionNote: permissionNote(a.command),
+      };
+    });
+}
+
+/**
+ * Derive a one-line permission summary from known CLI flags (else the command).
+ * Handles both `--flag value` and `--flag=value` spellings — the `=` form is
+ * common and a security-transparency note that missed it would silently
+ * under-report the most dangerous (`--sandbox=danger-full-access`,
+ * `--permission-mode=bypassPermissions`) configurations.
+ */
+function permissionNote(command: string[]): string {
+  const notes: string[] = [];
+  /** The value of `flag`, whether spelled `--flag value` or `--flag=value`. */
+  const valueOf = (flag: string, i: number): string | null => {
+    const arg = command[i]!;
+    if (arg === flag) return command[i + 1] ?? null;
+    if (arg.startsWith(flag + "=")) return arg.slice(flag.length + 1) || null;
+    return null;
+  };
+  for (let i = 0; i < command.length; i++) {
+    const arg = command[i]!;
+    const pm = valueOf("--permission-mode", i);
+    const sb = valueOf("--sandbox", i);
+    const am = valueOf("--approval-mode", i);
+    if (pm) notes.push(`permission mode: ${pm}`);
+    else if (sb) notes.push(`sandbox: ${sb}`);
+    else if (am) notes.push(`approval mode: ${am}`);
+    else if (arg === "--dangerously-skip-permissions") notes.push("full autonomy (permission prompts skipped)");
+    else if (arg === "--yolo" || arg === "--full-auto") notes.push("full autonomy");
+  }
+  return notes.length ? notes.join(" · ") : `runs: ${command[0]}`;
+}
+
 /** Whether an adapter's executable resolves on the current PATH. */
-function isOnPath(cmd: string): boolean {
+export function isOnPath(cmd: string): boolean {
   if (cmd.includes("/")) return existsSync(expandHome(cmd));
   for (const dir of (process.env.PATH ?? "").split(delimiter)) {
     if (!dir) continue;

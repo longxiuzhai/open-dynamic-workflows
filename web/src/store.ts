@@ -8,7 +8,15 @@
  * crashes the window, it just leaves the last-known state and flips `conn`.
  */
 import { api } from "./api";
-import type { Connection, RunDetail, RunSummary, WorkflowEvent, WorkflowSummary } from "./types";
+import type {
+  AdapterListing,
+  Capabilities,
+  Connection,
+  RunDetail,
+  RunSummary,
+  WorkflowEvent,
+  WorkflowSummary,
+} from "./types";
 import { ACTIVE } from "./util";
 
 export type ActivityEvent = WorkflowEvent & { _run: string; _adapter: string | null };
@@ -19,6 +27,10 @@ class Store {
   conn: Connection = "connecting";
   runs: RunSummary[] = [];
   workflows: WorkflowSummary[] | null = null;
+  adapters: AdapterListing[] | null = null;
+  // Default writable = true (the loopback common case) until the probe answers,
+  // so local use never flashes a read-only UI on first paint.
+  capabilities: Capabilities = { writable: true };
   run: RunDetail | null = null;
   runEvents: WorkflowEvent[] = [];
   result: unknown = undefined;
@@ -85,6 +97,27 @@ class Store {
       this.emit();
     } catch {
       this.workflows = this.workflows ?? [];
+      this.emit();
+    }
+  }
+
+  async loadCapabilities(): Promise<void> {
+    try {
+      this.capabilities = await api.capabilities();
+      this.emit();
+    } catch {
+      /* keep the optimistic default; a failed write still surfaces its 409 */
+    }
+  }
+
+  async loadAdapters(): Promise<void> {
+    try {
+      this.adapters = await api.adapters();
+      this.emit();
+    } catch {
+      // Leave a never-loaded list as null (not []) so enterRoute's
+      // `adapters === null` guard retries on the next visit instead of caching a
+      // permanently-empty picker from one transient failure.
       this.emit();
     }
   }
