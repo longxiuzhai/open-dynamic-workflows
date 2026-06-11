@@ -103,7 +103,14 @@ pub fn run() {
 fn spawn_sidecar(app: AppHandle) {
     let sidecar = match app.shell().sidecar("odw") {
         Ok(cmd) => {
-            let cmd = cmd.args(["serve", "--port", &SERVE_PORT.to_string()]);
+            let cmd = cmd
+                .args(["serve", "--port", &SERVE_PORT.to_string()])
+                // A GUI launch inherits launchd's stripped PATH, which omits the
+                // dirs agent CLIs live in (~/.local/bin, /opt/homebrew/bin,
+                // nvm/conda) — without this every adapter reads as "not installed"
+                // and a run ENOENTs on spawn. The flag tells the sidecar to recover
+                // the login shell's real PATH at startup.
+                .env("ODW_RESOLVE_LOGIN_PATH", "1");
             // A launched .app inherits cwd `/`. Root is a terrible default for a
             // run's working directory (copy-mode workspace isolation can't copy
             // `/`, and project workflow lookups would root at `/.odw/workflows`).
